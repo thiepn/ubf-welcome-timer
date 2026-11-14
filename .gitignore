@@ -1,0 +1,29 @@
+# Local dependencies, environments, and caches
+node_modules/
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Local configuration or secrets (never commit)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Test output and temporary files
+playwright-report/
+test-results/
+coverage/
+*.log
+*.zip
+
+# Editors and operating systems
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Deliberately NOT ignored: assets/*.png, source, test files

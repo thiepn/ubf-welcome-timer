@@ -1,0 +1,50 @@
+:root { color-scheme: light; --timer-blue: #0f5eab; }
+* { box-sizing: border-box; }
+html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; }
+body { display: grid; place-items: center; background: #11161c; cursor: none; user-select: none; }
+.stage {
+  position: relative;
+  width: min(100vw, 177.777778vh);
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  isolation: isolate;
+  background: #f7f7f7;
+}
+.slide-image { display: block; position: absolute; inset: 0; width: 100%; height: 100%; object-fit: fill; transition: opacity 440ms ease-in-out; }
+.slide-image--welcome { z-index: 1; opacity: 1; }
+.slide-image--clean { z-index: 2; opacity: 0; }
+.countdown {
+  position: absolute;
+  z-index: 3;
+  left: 26.64%;
+  top: 12.04%;
+  width: 42.84%;
+  height: 76.15%;
+  display: grid;
+  place-items: center;
+  opacity: 0;
+  transition: opacity 430ms ease-in-out;
+  container-type: inline-size;
+}
+.progress-ring { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.progress-track, .progress-fill { fill: none; stroke-width: 11; }
+.progress-track { stroke: #d8e3ef; }
+.progress-fill { stroke: var(--timer-blue); stroke-linecap: round; }
+.timer-numbers {
+  position: relative;
+  color: var(--timer-blue);
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 20cqw;
+  line-height: 1;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+  letter-spacing: -.065em;
+  padding-right: .065em;
+  white-space: nowrap;
+}
+.stage.is-timer .slide-image--welcome { opacity: 0; }
+.stage.is-timer .slide-image--clean, .stage.is-timer .countdown { opacity: 1; }
+.loading .slide-image, .loading .countdown { transition: none !important; }
+.sr-only { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
+@media (prefers-reduced-motion: reduce) { .slide-image, .countdown { transition-duration: 0ms; } }
