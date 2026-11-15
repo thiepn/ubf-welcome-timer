@@ -4,6 +4,7 @@ import {createConnection} from 'node:net';
 import {setTimeout as delay} from 'node:timers/promises';
 import {fileURLToPath} from 'node:url';
 import path from 'node:path';
+import {openDefaultBrowser} from './browser-open.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const port = 8765;
@@ -82,12 +83,7 @@ if (!Number.isSafeInteger(nodeMajor) || nodeMajor < 20) {
     console.log('No internet connection or npm install is needed during operation.');
     console.log('To stop the timer safely, type q and press Enter in this window.');
     if (process.platform === 'win32' && !noBrowser) {
-      const opener = spawn('cmd.exe', ['/d', '/c', `start "" "${controllerUrl}"`], {
-        windowsHide: true,
-        stdio: 'ignore',
-      });
-      opener.once('error', error => console.error(`Could not open browser automatically: ${error.message}. Open ${controllerUrl} manually.`));
-      opener.unref();
+      openDefaultBrowser(controllerUrl);
     }
   }
   const childExit = await new Promise(resolve => {
