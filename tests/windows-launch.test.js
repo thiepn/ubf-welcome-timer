@@ -14,7 +14,7 @@ test('Windows double-click CMD launcher serves local controller, display and Can
 }, async () => {
   const child = spawn('cmd.exe', ['/d', '/c', 'Start-Timer.cmd'], {
     cwd: root,
-    env: {...process.env, UBF_TIMER_NO_BROWSER: '1'},
+    env: {...process.env, UBF_TIMER_NO_BROWSER: '1', UBF_TIMER_NONINTERACTIVE:'1'},
     windowsHide: true,
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -59,7 +59,7 @@ import {tmpdir} from 'node:os';
 function runCmd(cwd = root) {
   const child = spawn('cmd.exe', ['/d','/c','Start-Timer.cmd'], {
     cwd,
-    env: {...process.env, UBF_TIMER_NO_BROWSER: '1'},
+    env: {...process.env, UBF_TIMER_NO_BROWSER: '1', UBF_TIMER_NONINTERACTIVE:'1'},
     windowsHide: true,
     stdio: ['pipe','pipe','pipe'],
   });
