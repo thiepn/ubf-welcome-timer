@@ -98,3 +98,5 @@ jobs:
         run: node --test tests/native-desktop.test.js
       - name: Compile and run native unit tests (no installer)
         run: cargo test --manifest-path src-tauri/Cargo.toml
+      - name: Run real WebView2 dual-window timer propagation (no physical projector)
+        run: node tests/native-webview2-smoke.mjs

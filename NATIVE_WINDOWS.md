@@ -51,3 +51,18 @@ Tauri configuration is in src-tauri/tauri.conf.json. The staged frontend is dist
 - Full Sunday rehearsal with sleep/notification/network handling.
 
 Do not distribute or use for a live Sunday service until these checks pass.
+
+## Additional native CI acceptance fixture
+
+The draft PR includes a **Windows Server 2022 real WebView2** two-window smoke
+(`src-tauri/src/bin/webview2_smoke.rs`). It starts the actual controller and
+display HTML pages in two Tauri WebViews on a single monitor, starts a 3-minute
+timer through the controller, then requires the display WebView to observe the
+running countdown, shared localStorage state and loaded Canva image. The test
+process must report a positive result within 90 seconds or CI fails.
+
+This is an isolated **test-only binary**, not the desktop app, not an installer,
+and does not attempt to detect or occupy any physical projector. Even a passing
+result proves only WebView2 propagation in the CI environment. Fullscreen
+placement, hotplug, and PowerPoint handoff on the actual Windows 11 church
+equipment remain **NOT TESTED**.
