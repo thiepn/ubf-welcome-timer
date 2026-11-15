@@ -30,11 +30,22 @@ NATIVE_BRIDGE_MOCK = r"""(() => {
     {id: 'PROJECTOR-A|1920|0|1920|1080', name: 'Projektor A', width: 1920, height: 1080}
   ];
   window.__nativePopupWasCalled = false;
+  window.__nativeDelayNextStatus = false;
+  window.__nativePendingStatus = [];
   window.open = () => { window.__nativePopupWasCalled = true; throw Error('native popup regression'); };
   window.__TAURI__ = {core: {invoke: async (command, args = {}) => {
     window.__nativeCalls.push({command, args});
     if (command === 'list_projector_targets') return window.__nativeTargets;
-    if (command === 'projector_status') return window.__nativeActive;
+    if (command === 'projector_status') {
+      if (window.__nativeDelayNextStatus) {
+        window.__nativeDelayNextStatus = false;
+        const captured = window.__nativeActive;
+        return new Promise(resolve => {
+          window.__nativePendingStatus.push(() => resolve(captured));
+        });
+      }
+      return window.__nativeActive;
+    }
     if (command === 'open_projector') {
       if (!window.__nativeTargets.some(target => target.id === args.monitorKey)) {
         throw Error('Die Beameranordnung hat sich geändert.');
@@ -372,6 +383,30 @@ class ProjectorTimerBrowserTests(unittest.TestCase):
             'Die Beameranordnung hat sich geändert.', timeout=2000)
         self.assertFalse(self.control.evaluate('window.__nativeActive'))
         self.assertFalse(self.control.evaluate('window.__nativePopupWasCalled'))
+
+    def test_17_in_flight_status_must_not_erase_a_new_projector_handoff(self):
+        # Deterministically reproduce a status request started before the
+        # operator clicks 'Auf Beamer projizieren'. Its late "inactive" reply
+        # must not hide Beamer freigeben after the actual opening succeeds.
+        self.control.add_init_script(script=NATIVE_BRIDGE_MOCK)
+        self.control.reload()
+        project = self.control.get_by_role('button', name='Auf Beamer projizieren')
+        release = self.control.get_by_role('button', name='Beamer freigeben')
+        expect(project).to_be_enabled(timeout=4000)
+        self.control.evaluate("""() => {
+          window.__nativeDelayNextStatus = true;
+          window.dispatchEvent(new Event('focus'));
+        }""")
+        self.control.wait_for_function('window.__nativePendingStatus.length === 1')
+        project.click()
+        expect(release).to_be_visible(timeout=2000)
+        self.control.evaluate('window.__nativePendingStatus.shift()()')
+        self.control.wait_for_timeout(100)
+        # On the old native-projector.js, the stale poll sets active=false,
+        # hiding the release control during an ongoing service.
+        self.assertTrue(release.is_visible(),
+                        'Stale status concealed Beamer freigeben after successful projection')
+        self.assertTrue(self.control.evaluate('window.__nativeActive'))
 
     @staticmethod
     def _seconds(s):
