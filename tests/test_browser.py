@@ -204,28 +204,13 @@ class ProjectorTimerBrowserTests(unittest.TestCase):
         self.control.get_by_role('button', name='3 Min.').click()
         self.control.get_by_role('button', name='Countdown starten').click()
         expect(self.display.locator('#stage')).to_have_class(re.compile(r'is-timer'))
-        expect(self.display.locator('#timer-numbers')).to_have_text(re.compile(r'^0[23]:[0-5][0-9]
-        mm,ss = map(int,s.split(':'))
-        return mm*60+ss
-
-
-if __name__ == '__main__':
-    unittest.main()
-))
+        expect(self.display.locator('#timer-numbers')).to_have_text(re.compile(r'^0[23]:[0-5][0-9]$'))
         self.control.wait_for_timeout(100)
         self.control.reload()
         self.control.get_by_role('button', name='1 Min.').click()
         self.control.get_by_role('button', name='Countdown starten').click()
         expect(self.control.locator('#status-badge')).to_have_attribute('data-phase', 'running')
-        # Equal revision in a new session must not strand the live display at 03:00.
-        expect(self.display.locator('#timer-numbers')).to_have_text(re.compile(r'^(?:01:00|00:[0-5][0-9])
-        mm,ss = map(int,s.split(':'))
-        return mm*60+ss
-
-
-if __name__ == '__main__':
-    unittest.main()
-), timeout=2000)
+        expect(self.display.locator('#timer-numbers')).to_have_text(re.compile(r'^(?:01:00|00:[0-5][0-9])$'), timeout=2000)
 
     def test_11_second_controller_cannot_start_during_startup(self):
         second = self.context.new_page()
@@ -233,7 +218,6 @@ if __name__ == '__main__':
         try:
             second.goto(BASE + '/control.html')
             second.evaluate("() => document.querySelector('#start').click()")
-            # Refuse commands before presence heartbeats can elect a single owner.
             self.assertEqual(second.locator('#status-badge').get_attribute('data-phase'), 'welcome')
             self.assertNotIn('is-timer', self.display.locator('#stage').get_attribute('class'))
         finally:
