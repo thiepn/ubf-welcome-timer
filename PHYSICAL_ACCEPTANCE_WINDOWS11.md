@@ -25,10 +25,10 @@ nicht-öffentlichen Probelauf testen. Nicht im Gottesdienst erproben.
 
 | ID | Durchführung | PASS-Kriterium | Beobachtung |
 | --- | --- | --- | --- |
-| W01 | Nativen Timer auf Windows 11 starten, Beamer erweitern, **Auf Beamer projizieren** | Steuerung ausschließlich auf dem Laptop; Welcome-Folie ausschließlich und vollflächig auf dem Beamer; kein F11 oder Fensterziehen | NOT_TESTED |
+| W01 | Nativen Timer auf Windows 11 starten, Beamer erweitern, **Auf Beamer projizieren**; direkt danach per Tastatur den Laptop-Timer bedienen | Steuerung ausschließlich und weiter fokussiert auf dem Laptop; Welcome-Folie ausschließlich und vollflächig auf dem Beamer; kein F11 oder Fensterziehen | NOT_TESTED |
 | W02 | Vorher Internetverbindung trennen; App neu öffnen, Projektion starten | Original-Canva-Folie und Timer funktionieren vollständig offline; kein lokaler Node-Server nötig | NOT_TESTED |
 | W03 | 10-Sekunden-Timer starten, pausieren, fortsetzen, bis 00:00, dann Willkommen | Beamer und Steuerung stimmen überein; keine abgeschnittenen Zahlen/Progress-Ringe; Countdown bleibt bei 00:00 | NOT_TESTED |
-| W04 | Bei laufender Projektion **Beamer freigeben**; anschließend **Auf Beamer projizieren** | Nur das Beamerfenster schließt/öffnet; Steuerung und laufender Timer bleiben erhalten; keine falschen Zustandsanzeigen | NOT_TESTED |
+| W04 | Bei laufender Projektion **Beamer freigeben**; anschließend **Auf Beamer projizieren**; jeweils Laptop-Fokus prüfen | Nur das Beamerfenster schließt/öffnet; Steuerung bleibt per Tastatur bedienbar und laufender Timer bleibt erhalten; keine falschen Zustandsanzeigen | NOT_TESTED |
 | W05 | PowerPoint-Folien auf dem richtigen **externen** Präsentationsmonitor vorbereiten; am Ende des Countdowns freigeben und PowerPoint zeigen | Keine verkehrte Presenter-/Audience-Ansicht, keine Laptop-Steuerung auf dem Beamer, keine unerwünschte Desktop-Einblendung; Verzögerung dokumentieren | NOT_TESTED |
 | W06 | Canva **Vollbild** und **Präsentationsansicht** separat prüfen; dann vom Timer an die Audience-Folie übergeben | Nur Audience-Inhalt auf dem Beamer; der Timer verdeckt Canva nach Freigabe nicht; keine unbeabsichtigten Fenster oder Desktop-Einblendungen | NOT_TESTED |
 | W07 | Bei aktivem Timer Beamerkabel abziehen; danach wieder verbinden und neu projizieren | Projektion übernimmt niemals das Laptop-Panel; Steuerung bleibt bedienbar; Wiederverbinden erfordert keine manuelle Fensterrettung | NOT_TESTED |

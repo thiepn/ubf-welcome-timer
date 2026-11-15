@@ -59,6 +59,11 @@ test('native actions are restricted to the controller and display is read-only',
   assert.match(file('js/native-projector.js'), /monitorKey/);
   assert.doesNotMatch(file('js/native-projector.js'), /Number\(selector\.value\)/);
   assert.match(main, /WebviewUrl::App\("display\.html"\.into\(\)\)/);
+  assert.match(main, /\.focused\(false\)/);
+  assert.match(main, /\.focusable\(false\)/);
+  const nativeSmoke = file('src-tauri/src/bin/webview2_smoke.rs');
+  assert.match(nativeSmoke, /WEBVIEW2_FOCUS_PASS/);
+  assert.match(nativeSmoke, /WEBVIEW2_FOCUS_RELEASE_PASS/);
   assert.doesNotMatch(file('js/display.js'), /__TAURI__|open_projector|release_projector/);
 });
 

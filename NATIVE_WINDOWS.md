@@ -107,3 +107,17 @@ The documented handoff is deliberately conservative: `Beamer freigeben`
 only closes the timer window. It cannot certify that PowerPoint or Canva has
 already put the audience slide on the correct monitor, and it cannot prevent
 a temporary view of the desktop if another presentation is not ready.
+
+## Operator-focus handoff verification (Windows CI)
+
+The projector WebView is constructed as **not initially focused** and
+**non-focusable**. Its display is read-only, so the keyboard and mouse focus
+must remain on the laptop controller while a projection opens or reopens.
+This avoids redirecting keyboard operations to a separate audience window.
+
+A Windows Server 2022 real-WebView2 test first reproduced the old behavior:
+the controller lost focus and the display gained focus after opening the
+projector-style window. The regression now requires the operator controller to
+remain focused after opening, after closing the display, and while the
+CI-only fullscreen window is visible. The test uses a single monitor: the
+real church's separate projector and physical input devices are **NOT TESTED**.

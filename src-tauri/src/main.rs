@@ -268,6 +268,10 @@ async fn open_projector(
         WebviewUrl::App("display.html".into()),
     )
     .title("UBF Köln — Projektion")
+    // The audience screen is read-only: Windows must keep keyboard input on
+    // the operator's laptop even while a fullscreen WebView2 opens or reopens.
+    .focused(false)
+    .focusable(false)
     .visible(false)
     .decorations(false)
     .resizable(false)
