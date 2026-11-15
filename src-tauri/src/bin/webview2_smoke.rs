@@ -72,6 +72,9 @@ async fn smoke_report(
                     return Err("WEBVIEW2_FOCUS_INCONCLUSIVE: controller cannot obtain Windows focus".into());
                 }
                 focus_probe.show().map_err(|e| e.to_string())?;
+                // Production explicitly restores the operator's previous
+                // focus after a projector is shown. Test the same behavior.
+                controller.set_focus().map_err(|e| e.to_string())?;
             }
             _ => return Err(format!("Unexpected native smoke signal: {} / {phase}", window.label())),
         }

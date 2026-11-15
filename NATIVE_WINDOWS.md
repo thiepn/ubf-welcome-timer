@@ -111,8 +111,11 @@ a temporary view of the desktop if another presentation is not ready.
 ## Operator-focus handoff verification (Windows CI)
 
 The projector WebView is constructed as **not initially focused** and
-**non-focusable**. Its display is read-only, so the keyboard and mouse focus
-must remain on the laptop controller while a projection opens or reopens.
+**non-focusable**, and the native controller restores its previous focus after
+the projection window is shown. Windows CI demonstrated that the builder flags
+alone did NOT prevent the read-only WebView2 from stealing focus. The explicit
+focus restore ensures the laptop control window remains the keyboard target
+when an operator opened the projection from that controller.
 This avoids redirecting keyboard operations to a separate audience window.
 
 A Windows Server 2022 real-WebView2 test first reproduced the old behavior:

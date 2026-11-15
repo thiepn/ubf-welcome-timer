@@ -243,6 +243,10 @@ async fn open_projector(
     monitor_key: String,
 ) -> Result<(), String> {
     require_controller(&window)?;
+    // The operator clicked this control window; preserve its focus across
+    // Windows WebView2's fullscreen creation/show transition. Avoid stealing
+    // focus if the operator switched to PowerPoint meanwhile.
+    let operator_had_focus = window.is_focused().map_err(|e| e.to_string())?;
     let _opening_permit = registry.begin_open()?;
     let (target, key) = verified_target(&window, &monitor_key)?;
     let position = target.position();
@@ -257,6 +261,12 @@ async fn open_projector(
         if !wait_for_fullscreen_placement(&window, &existing, &key).await? {
             close_failed_projection(&existing, &registry)?;
             return Err("Beamer wurde nicht auf dem gewählten Bildschirm im Vollbild angezeigt.".into());
+        }
+        if operator_had_focus {
+            if let Err(error) = window.set_focus() {
+                let _ = close_failed_projection(&existing, &registry);
+                return Err(format!("Laptop-Steuerung konnte nicht fokussiert werden: {error}"));
+            }
         }
         registry.set(Some(key))?;
         return Ok(());
@@ -296,6 +306,12 @@ async fn open_projector(
     if !wait_for_fullscreen_placement(&window, &projector, &key).await? {
         close_failed_projection(&projector, &registry)?;
         return Err("Beamer wurde nicht auf dem gewählten Bildschirm im Vollbild angezeigt.".into());
+    }
+    if operator_had_focus {
+        if let Err(error) = window.set_focus() {
+            let _ = close_failed_projection(&projector, &registry);
+            return Err(format!("Laptop-Steuerung konnte nicht fokussiert werden: {error}"));
+        }
     }
     registry.set(Some(key))?;
     Ok(())

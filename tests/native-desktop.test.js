@@ -61,6 +61,8 @@ test('native actions are restricted to the controller and display is read-only',
   assert.match(main, /WebviewUrl::App\("display\.html"\.into\(\)\)/);
   assert.match(main, /\.focused\(false\)/);
   assert.match(main, /\.focusable\(false\)/);
+  assert.match(main, /operator_had_focus/);
+  assert.match(main, /window\.set_focus\(\)/);
   const nativeSmoke = file('src-tauri/src/bin/webview2_smoke.rs');
   assert.match(nativeSmoke, /WEBVIEW2_FOCUS_PASS/);
   assert.match(nativeSmoke, /WEBVIEW2_FOCUS_RELEASE_PASS/);
