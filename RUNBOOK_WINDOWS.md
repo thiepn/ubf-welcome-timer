@@ -29,7 +29,7 @@
 | Zurücksetzen | Zeit auf gewählte Dauer zurücksetzen; Timer bleibt pausiert |
 | Willkommensfolie anzeigen | Zur ursprünglichen Canva-Folie zurückkehren |
 
-Das schwarze Serverfenster offen lassen. Kein zweites Steuerfenster starten. Nicht zwischen Browserprofilen, Hostnamen oder einer späteren GitHub-Pages-Adresse wechseln: Die Fenster würden nicht zuverlässig synchronisieren.
+Das schwarze Serverfenster offen lassen. **Zum regulären Beenden `q` eingeben und Enter drücken; nach dem Schließen kann der Timer neu gestartet werden.** Kein zweites Steuerfenster starten. Nicht zwischen Browserprofilen, Hostnamen oder einer späteren GitHub-Pages-Adresse wechseln: Die Fenster würden nicht zuverlässig synchronisieren.
 
 ## Schnelle Fehlerbehebung
 
