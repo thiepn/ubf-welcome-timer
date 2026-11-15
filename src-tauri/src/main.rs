@@ -3,6 +3,7 @@
 //! receives native command permissions. No network server runs in this app.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod operator_focus;
 use serde::Serialize;
 use std::time::Duration;
 use std::sync::{atomic::{AtomicBool, Ordering}, Mutex};
@@ -253,6 +254,9 @@ async fn open_projector(
     let target_position = PhysicalPosition::new(position.x as f64, position.y as f64);
 
     if let Some(existing) = app.get_webview_window("projector") {
+        // A previously focused controller must not reclaim focus if the
+        // operator switched to a presentation before fullscreen transition.
+        let focused_before_fullscreen = window.is_focused().map_err(|e| e.to_string())?;
         // The existing window is never assumed to be on the right display.
         existing
             .set_fullscreen_on_monitor(target_position)
@@ -262,11 +266,11 @@ async fn open_projector(
             close_failed_projection(&existing, &registry)?;
             return Err("Beamer wurde nicht auf dem gewählten Bildschirm im Vollbild angezeigt.".into());
         }
-        if operator_had_focus {
-            if let Err(error) = window.set_focus() {
-                let _ = close_failed_projection(&existing, &registry);
-                return Err(format!("Laptop-Steuerung konnte nicht fokussiert werden: {error}"));
-            }
+        if let Err(error) = operator_focus::restore_if_projector_activated(
+            &window, &existing, operator_had_focus, focused_before_fullscreen,
+        ) {
+            let _ = close_failed_projection(&existing, &registry);
+            return Err(format!("Laptop-Fokusprüfung fehlgeschlagen: {error}"));
         }
         registry.set(Some(key))?;
         return Ok(());
@@ -293,6 +297,7 @@ async fn open_projector(
         let _ = projector.close();
         return Err(format!("Beamerposition konnte nicht gesetzt werden: {e}"));
     }
+    let focused_before_fullscreen = window.is_focused().map_err(|e| e.to_string())?;
     if let Err(e) = projector.set_fullscreen_on_monitor(target_position) {
         let _ = projector.close();
         return Err(format!("Beamer-Vollbild fehlgeschlagen: {e}"));
@@ -307,11 +312,11 @@ async fn open_projector(
         close_failed_projection(&projector, &registry)?;
         return Err("Beamer wurde nicht auf dem gewählten Bildschirm im Vollbild angezeigt.".into());
     }
-    if operator_had_focus {
-        if let Err(error) = window.set_focus() {
-            let _ = close_failed_projection(&projector, &registry);
-            return Err(format!("Laptop-Steuerung konnte nicht fokussiert werden: {error}"));
-        }
+    if let Err(error) = operator_focus::restore_if_projector_activated(
+        &window, &projector, operator_had_focus, focused_before_fullscreen,
+    ) {
+        let _ = close_failed_projection(&projector, &registry);
+        return Err(format!("Laptop-Fokusprüfung fehlgeschlagen: {error}"));
     }
     registry.set(Some(key))?;
     Ok(())

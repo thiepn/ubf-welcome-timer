@@ -124,3 +124,25 @@ projector-style window. The regression now requires the operator controller to
 remain focused after opening, after closing the display, and while the
 CI-only fullscreen window is visible. The test uses a single monitor: the
 real church's separate projector and physical input devices are **NOT TESTED**.
+
+## Operator switches to PowerPoint while projection is opening
+
+GitHub Actions #43748043998 first **reproduced an actual Windows focus
+defect** using a focusable, test-only WebView2 presentation stand-in. The
+controller was initially focused, another window obtained focus between
+fullscreen show and delayed completion, then an unconditional controller
+`set_focus()` stole keyboard focus back. This fixture is **not** actual
+PowerPoint or Canva acceptance.
+
+The minimal correction shares `src-tauri/src/operator_focus.rs` between
+production and Windows smoke. The timer attempts to restore the controller
+only if it was focused at opening, remained focused immediately before
+fullscreen, and **its own projector window now owns focus**. Otherwise it
+leaves the newly selected presentation focused. This avoids a blind
+restoration based on a stale initial-focus snapshot.
+
+Remaining limitations: Microsoft Windows controls cross-process focus
+permissions and transitions. A test-only second WebView2 process window
+inside the same app is **not proof** of a seamless external PowerPoint/Canva
+handoff. Real Windows 11 dual-screen behavior and Sunday service remain
+**NOT_TESTED / NO_GO**.

@@ -4,6 +4,8 @@
 //! No projector or PowerPoint acceptance is implied.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+#[path = "../operator_focus.rs"]
+mod operator_focus;
 use tauri::{Manager, PhysicalPosition, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 
 const KEY: &str = "ubf-koeln-projector-timer:state:v1";
@@ -68,13 +70,16 @@ async fn smoke_report(
                 .map_err(|e| e.to_string())?;
                 let controller = app.get_webview_window("controller").ok_or("Controller missing")?;
                 controller.set_focus().map_err(|e| e.to_string())?;
-                if !controller.is_focused().map_err(|e| e.to_string())? {
+                let operator_focused = controller.is_focused().map_err(|e| e.to_string())?;
+                if !operator_focused {
                     return Err("WEBVIEW2_FOCUS_INCONCLUSIVE: controller cannot obtain Windows focus".into());
                 }
                 focus_probe.show().map_err(|e| e.to_string())?;
-                // Production explicitly restores the operator's previous
-                // focus after a projector is shown. Test the same behavior.
-                controller.set_focus().map_err(|e| e.to_string())?;
+                // Invoke the EXACT production helper, not a copied focus
+                // algorithm, for the ordinary projector opening case.
+                operator_focus::restore_if_projector_activated(
+                    &controller, &focus_probe, operator_focused, operator_focused,
+                )?;
             }
             _ => return Err(format!("Unexpected native smoke signal: {} / {phase}", window.label())),
         }
@@ -123,6 +128,10 @@ async fn smoke_focus_check(app: tauri::AppHandle, window: WebviewWindow) -> Resu
     .resizable(false)
     .build().map_err(|e| e.to_string())?;
     fullscreen.set_position(PhysicalPosition::new(p.x, p.y)).map_err(|e| e.to_string())?;
+    let operator_focused_before_fullscreen = controller.is_focused().map_err(|e| e.to_string())?;
+    if !operator_focused_before_fullscreen {
+        return Err("WEBVIEW2_FOCUS_RACE_INCONCLUSIVE: controller was not initially focused".into());
+    }
     fullscreen.set_fullscreen_on_monitor(PhysicalPosition::new(
         f64::from(p.x), f64::from(p.y),
     )).map_err(|e| e.to_string())?;
@@ -146,16 +155,19 @@ async fn smoke_focus_check(app: tauri::AppHandle, window: WebviewWindow) -> Resu
         return Err("WEBVIEW2_FOCUS_RACE_INCONCLUSIVE: CI competitor could not obtain Windows focus".into());
     }
     println!("WEBVIEW2_FOCUS_RACE_SETUP: presentation window obtained Windows focus while the projector was opening");
-    // OLD production behavior, intentionally duplicated until this proves
-    // a failure: operator_had_focus was true at command initiation.
-    controller.set_focus().map_err(|e| e.to_string())?;
+    // Apply the SAME focus rule as the native open_projector command.
+    // A separate operator-selected window owns focus now: leave it alone.
+    let restored = operator_focus::restore_if_projector_activated(
+        &controller, &fullscreen, operator_focused_before_fullscreen,
+        operator_focused_before_fullscreen,
+    )?;
     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-    if !presentation.is_focused().map_err(|e| e.to_string())? {
-        eprintln!("WEBVIEW2_FOCUS_RACE_REPRO: delayed controller restoration stole focus from newly selected presentation window");
+    if restored || !presentation.is_focused().map_err(|e| e.to_string())? {
+        eprintln!("WEBVIEW2_FOCUS_RACE_FAIL: timer reclaimed focus after presentation window was selected");
         app.exit(1);
         return Ok(());
     }
-    println!("WEBVIEW2_FOCUS_RACE_PASS: presentation remained focused after timer opening");
+    println!("WEBVIEW2_FOCUS_RACE_PASS: real Windows presentation stand-in retained focus during delayed projector placement");
     // A one-monitor CI runner can occlude either WebView2 and suspend its JS
     // timers despite a correct native window state. Check directly from Rust.
     for _ in 0..50 {
@@ -204,8 +216,13 @@ fn smoke_fullscreen_check(app: tauri::AppHandle, window: WebviewWindow) -> Resul
     let max_error = 2_u32;
     let controller_focused = window.is_focused().map_err(|e| e.to_string())?;
     let display_focused = fullscreen.is_focused().map_err(|e| e.to_string())?;
+    // In the handoff race the user's presentation stand-in SHOULD keep
+    // focus, so requiring the controller to be focused would be incorrect.
+    let presentation_focused = app.get_webview_window("ci-presentation")
+        .map(|w| w.is_focused().map_err(|e| e.to_string()))
+        .transpose()?.unwrap_or(false);
     let pass = fullscreen.is_fullscreen().map_err(|e| e.to_string())?
-        && controller_focused && !display_focused
+        && (controller_focused || presentation_focused) && !display_focused
         && p.x.abs_diff(mpos.x) <= max_error
         && p.y.abs_diff(mpos.y) <= max_error
         && s.width.abs_diff(msize.width) <= max_error
