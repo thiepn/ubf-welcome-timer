@@ -21,8 +21,8 @@ ROOT = Path(__file__).resolve().parents[1]
 PORT = 18765
 BASE = f'http://127.0.0.1:{PORT}'
 
-// This mock exercises the real controller DOM bridge in Chromium; it is NOT
-// a WebView2 test and deliberately cannot certify physical projector behavior.
+# This mock exercises the real controller DOM bridge in Chromium; it is NOT
+# a WebView2 test and deliberately cannot certify physical projector behavior.
 NATIVE_BRIDGE_MOCK = r"""(() => {
   window.__nativeCalls = [];
   window.__nativeActive = false;
