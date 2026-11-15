@@ -50,6 +50,12 @@ test('native actions are restricted to the controller and display is read-only',
   assert.match(main, /is_fullscreen\(\)/);
   assert.match(main, /current_monitor\(\)/);
   assert.match(main, /validate_projector/);
+  assert.match(main, /physical_bounds_match/);
+  assert.match(main, /inner_position/);
+  assert.match(main, /inner_size/);
+  assert.match(main, /wait_for_fullscreen_placement/);
+  assert.match(main, /WindowEvent::Moved/);
+  assert.match(main, /WindowEvent::ScaleFactorChanged/);
   assert.match(file('js/native-projector.js'), /monitorKey/);
   assert.doesNotMatch(file('js/native-projector.js'), /Number\(selector\.value\)/);
   assert.match(main, /WebviewUrl::App\("display\.html"\.into\(\)\)/);

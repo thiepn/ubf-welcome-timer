@@ -66,3 +66,32 @@ and does not attempt to detect or occupy any physical projector. Even a passing
 result proves only WebView2 propagation in the CI environment. Fullscreen
 placement, hotplug, and PowerPoint handoff on the actual Windows 11 church
 equipment remain **NOT TESTED**.
+
+## Fullscreen coverage / unplug containment candidate
+
+The native projector now requires the actual WebView content rectangle to match
+the selected external monitor's *physical* pixel rectangle (within 2px),
+in addition to fullscreen state and monitor identity. This rejects taskbar-sized
+maximized windows and DPI/logical-pixel mistakes. Placement is rechecked for
+up to 1.2 seconds because Windows may asynchronously position fullscreen
+windows. The initially invisible window is moved to the chosen monitor before
+showing it.
+
+Monitor-move, resize and DPI-change events also trigger a fail-closed native
+check; an invalid projection is hidden and closed rather than waiting for
+the controller's three-second status poll. **Actual unplug on the church
+projector is not automatically certified by CI.**
+
+The isolated Windows Server 2022 WebView2 smoke now has an additional
+**single-monitor fullscreen experiment**: it opens a test-only fullscreen
+WebView and requires its actual inner physical bounds to match the CI runner's
+primary screen. The runner is not a projector and does not certify placement
+on an external display or mixed-DPI dual-monitor behavior.
+
+### Presentation handoff limitation
+
+`Beamer freigeben` closes only the timer display; the controller and countdown
+remain available. The Windows desktop may be briefly visible before a separate
+PowerPoint/Canva presentation covers the external monitor. This application
+**does not launch, activate, or automatically transfer control to PowerPoint
+or Canva**. A seamless handoff is **NOT TESTED** and must not be claimed.
