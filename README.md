@@ -7,7 +7,7 @@ A small static website for Sunday-service welcome projection. The public display
 ## Start on Windows 11 (offline-first)
 
 1. Install **Node.js 20+** before the service, then completely extract the project ZIP to a local folder (including `assets/` and `scripts/`).
-2. Double-click **`Start-Timer.cmd`** in the extracted root. Keep its black terminal window open: it starts the server only on `127.0.0.1:8765` and opens the controller in the default browser.
+2. Double-click **`Start-Timer.cmd`** in the extracted root. Keep its black terminal window open: it starts the server only on `127.0.0.1:8765` and opens the controller in the default browser. To stop gracefully, type **`q` and press Enter** in that window; confirm that it closes before restarting.
 3. If no browser opens automatically, go to **http://127.0.0.1:8765/control.html**.
 4. Connect the projector, select **Win + P → Erweitern**, then select **Projektionsfenster öffnen**. Move that separate window to the projector and press **F11**.
 5. Keep the controller window on the laptop, and run the 10-second rehearsal before real use.
@@ -57,7 +57,7 @@ If Canva assets are revised later, export both images at the **same 16:9 dimensi
 - A snapshot older than **12 hours since its last update** is discarded and replaced with the welcome slide.
 - Duplicate controller windows detect each other and temporarily disable timer actions until only one remains (where BroadcastChannel is available).
 
-**Limitations:** Both windows must share the same site origin and browser storage partition. Browsers in private/incognito windows, different profiles, or different physical devices do **not** automatically synchronize. System clock changes during a *closed* browser can affect reconstructed time. Storage restrictions can disable refresh recovery, and the controller displays a warning. Full offline *reopening* is not supported in v1; an already loaded timer continues without a network connection.
+**Limitations:** Both windows must share the same site origin and browser storage partition. Browsers in private/incognito windows, different profiles, or different physical devices do **not** automatically synchronize. System clock changes during a *closed* browser can affect reconstructed time. Storage restrictions can disable refresh recovery, and the controller displays a warning. For **localhost mode**, the controller and display can be freshly opened or reloaded without internet **while the local server remains running**. A GitHub Pages page without an offline cache cannot be cold-loaded without internet; hosted and localhost origins cannot share synchronization state.
 
 ## Tests
 
