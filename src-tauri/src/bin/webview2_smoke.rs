@@ -135,6 +135,16 @@ async fn smoke_focus_check(app: tauri::AppHandle, window: WebviewWindow) -> Resu
         }
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
     }
+    if let Some(w) = app.get_webview_window("ci-fullscreen") {
+        let monitor = w.primary_monitor().ok().flatten();
+        eprintln!(
+            "WEBVIEW2_FULLSCREEN_DIAG: fullscreen={:?} visible={:?} bounds={:?}/{:?} expected={:?}/{:?} controller_focused={:?} display_focused={:?}",
+            w.is_fullscreen(), w.is_visible(), w.inner_position(), w.inner_size(),
+            monitor.as_ref().map(|m| m.position().clone()),
+            monitor.as_ref().map(|m| m.size().clone()),
+            controller.is_focused(), w.is_focused(),
+        );
+    }
     eprintln!("WEBVIEW2_FULLSCREEN_FAIL: native fullscreen bounds never matched in 5s");
     app.exit(1);
     Ok(())
