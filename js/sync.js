@@ -105,7 +105,15 @@ export class TimerSync {
 
   accept(incoming) {
     if (!isValidState(incoming)) return;
-    if (incoming.revision <= this.state.revision) return;
+    // Revisions are monotonic within a session, not across sessions. After an
+    // unavailable storage write, a restarted controller may start a newer
+    // session at revision 1 while a live display still holds revision 1.
+    if (incoming.sessionId === this.state.sessionId) {
+      if (incoming.revision <= this.state.revision) return;
+    } else {
+      const freshDisplay = this.state.sessionId === 'welcome' && this.state.revision === 0;
+      if (!freshDisplay && incoming.createdAtEpochMs <= this.state.createdAtEpochMs) return;
+    }
     const recovered = recoverState(incoming, Date.now());
     // A stale state cannot resurrect a timer on display refresh.
     if (recovered.issue !== null) {
