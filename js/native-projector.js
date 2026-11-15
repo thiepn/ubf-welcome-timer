@@ -1,0 +1,121 @@
+// Optional native controller integration. The browser build stays unchanged:
+ // on web hosts the Tauri global is absent and this module does nothing.
+const native = globalThis.__TAURI__?.core;
+if (native?.invoke) {
+  const invoke = native.invoke;
+  const openButton = document.querySelector('#open-display');
+  const guide = document.querySelector('.guide');
+  const caption = document.querySelector('.preview-caption');
+  const panel = document.createElement('section');
+  panel.className = 'native-projection';
+  panel.setAttribute('aria-label', 'Native Beamersteuerung');
+  panel.innerHTML =
+    '<p id="native-projector-state" role="status" aria-live="polite">Bildschirme werden geprüft …</p>' +
+    '<label id="native-monitor-label" hidden>Beamer auswählen' +
+    '<select id="native-monitor"></select></label>' +
+    '<button type="button" id="native-projector-release" hidden>Beamer freigeben</button>' +
+    '<p class="native-projection-note">Bei Windows muss der Laptop als Hauptanzeige eingerichtet sein. ' +
+    'Win + P → Erweitern.</p>';
+  guide.parentNode.insertBefore(panel, guide);
+  guide.hidden = true;
+  caption.textContent = 'Vorschau · Die echte Projektion läuft auf dem zweiten Windows-Bildschirm.';
+  const state = panel.querySelector('#native-projector-state');
+  const selectorLabel = panel.querySelector('#native-monitor-label');
+  const selector = panel.querySelector('#native-monitor');
+  const releaseButton = panel.querySelector('#native-projector-release');
+  let busy = false;
+  let targets = [];
+  let active = false;
+
+  function explainError(error) {
+    return error instanceof Error ? error.message : String(error);
+  }
+
+  function render() {
+    selectorLabel.hidden = targets.length <= 1;
+    releaseButton.hidden = !active;
+    releaseButton.disabled = busy;
+    openButton.textContent = active ? 'Projektion läuft' : 'Auf Beamer projizieren';
+    openButton.disabled = busy || active || targets.length === 0;
+    if (active) {
+      state.textContent = 'Projektionsfenster auf externem Bildschirm aktiv. ' +
+        'Zur Übergabe an PowerPoint oder Canva: „Beamer freigeben“.';
+    } else if (!targets.length) {
+      state.textContent = 'Kein erweiterter Beamer erkannt. Win + P → Erweitern prüfen.';
+    } else if (targets.length > 1) {
+      state.textContent = 'Mehrere externe Monitore erkannt. Beamer vor dem Start auswählen.';
+    } else {
+      state.textContent = 'Externer Bildschirm bereit. Ein Klick startet die Vollbildprojektion.';
+    }
+  }
+
+  async function refresh() {
+    if (busy) return;
+    try {
+      const [newTargets, isActive] = await Promise.all([
+        invoke('list_projector_targets'),
+        invoke('projector_status'),
+      ]);
+      const selected = selector.value;
+      targets = newTargets;
+      active = isActive;
+      selector.replaceChildren();
+      for (const target of targets) {
+        const option = document.createElement('option');
+        option.value = String(target.id);
+        option.textContent = target.name + ' · ' + target.width + ' × ' + target.height;
+        selector.append(option);
+      }
+      if (targets.some(target => String(target.id) === selected)) selector.value = selected;
+      render();
+    } catch (error) {
+      openButton.disabled = true;
+      releaseButton.disabled = true;
+      state.textContent = 'Windows-Beamerprüfung fehlgeschlagen: ' + explainError(error);
+    }
+  }
+
+  openButton.addEventListener('click', async () => {
+    if (busy || active || !targets.length) return;
+    busy = true;
+    render();
+    try {
+      const monitorId = targets.length > 1 ? Number(selector.value) : null;
+      await invoke('open_projector', {monitorId});
+      await refreshAfterAction();
+    } catch (error) {
+      state.textContent = 'Projektion nicht gestartet: ' + explainError(error);
+    } finally {
+      busy = false;
+      // Preserve a useful error instead of immediately overwriting it.
+      openButton.disabled = active || !targets.length;
+      releaseButton.disabled = false;
+    }
+  });
+
+  releaseButton.addEventListener('click', async () => {
+    if (busy || !active) return;
+    busy = true;
+    releaseButton.disabled = true;
+    try {
+      await invoke('release_projector');
+      await refreshAfterAction();
+    } catch (error) {
+      state.textContent = 'Beamer konnte nicht freigegeben werden: ' + explainError(error);
+    } finally {
+      busy = false;
+      releaseButton.disabled = false;
+    }
+  });
+
+  async function refreshAfterAction() {
+    // Do not call refresh() while busy; fetch the actual native state first.
+    active = await invoke('projector_status');
+    busy = false;
+    render();
+  }
+
+  void refresh();
+  window.addEventListener('focus', () => { void refresh(); });
+  setInterval(() => { void refresh(); }, 3000);
+}

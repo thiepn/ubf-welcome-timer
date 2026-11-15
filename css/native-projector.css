@@ -1,0 +1,45 @@
+.native-projection {
+  display: grid;
+  gap: 0.8rem;
+  margin-top: 1rem;
+  padding: 1rem;
+  border: 1px solid #c7d6e4;
+  border-radius: 0.9rem;
+  background: #f6f9fc;
+  color: #143450;
+}
+.native-projection #native-projector-state {
+  margin: 0;
+  line-height: 1.5;
+}
+.native-projection label {
+  display: grid;
+  gap: 0.4rem;
+  font-weight: 600;
+}
+.native-projection select {
+  width: 100%;
+  padding: 0.6rem;
+  border: 1px solid #8da9c1;
+  border-radius: 0.45rem;
+  background: #fff;
+  color: #143450;
+}
+.native-projection button {
+  padding: 0.75rem 1rem;
+  border-radius: 0.55rem;
+  border: 1px solid #0f5eab;
+  background: #fff;
+  color: #0f5eab;
+  cursor: pointer;
+  font-weight: 700;
+}
+.native-projection button:hover:not(:disabled) { background: #e4eef8; }
+.native-projection button:disabled { opacity: 0.55; cursor: not-allowed; }
+.native-projection .native-projection-note {
+  margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: #476579;
+}
+.native-projection [hidden], .guide[hidden] { display: none !important; }

@@ -202,6 +202,7 @@ resetButton.addEventListener('click', () => command((now) => resetTimer(state, n
 welcomeButton.addEventListener('click', () => command((now) => returnToWelcome(state, now)));
 
 $('#open-display').addEventListener('click', () => {
+  if (globalThis.__TAURI__?.core?.invoke) return; // Native projector is owned by Rust.
   const popup = window.open(new URL('./display.html', location.href), 'ubf-koeln-projector');
   if (!popup) setWarning('Pop-up blockiert. Projektionsfenster über display.html direkt öffnen.');
   else popup.focus();

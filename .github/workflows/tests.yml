@@ -80,3 +80,21 @@ jobs:
           node-version: '18'
       - name: Verify launcher refuses unsupported Node.js
         run: node --test tests/windows-node18.test.js
+
+  native-windows:
+    name: Native Tauri compile and Rust policy tests (no packaging)
+    runs-on: windows-2022
+    timeout-minutes: 35
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+      - name: Check staged desktop frontend
+        run: node --test tests/native-desktop.test.js
+      - name: Compile and run native unit tests (no installer)
+        run: cargo test --manifest-path src-tauri/Cargo.toml
