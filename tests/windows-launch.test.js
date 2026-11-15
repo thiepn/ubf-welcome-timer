@@ -126,7 +126,7 @@ test('missing extracted project files fail closed before starting a server', {
 test('a different server occupying 8765 is not reused or terminated', {
   skip:process.platform !== 'win32', timeout:15000,
 }, async () => {
-  const blocker=createServer((req,res) => {res.writeHead(200);res.end('OTHER PROCESS');});
+  const blocker=createServer((req,res) => {res.writeHead(200, {'Connection':'close'});res.end('OTHER PROCESS');});
   await new Promise((resolve,reject) => { blocker.once('error',reject);blocker.listen(8765,'127.0.0.1',resolve); });
   const child=spawn(process.execPath,['scripts/launch-local.mjs','--no-open'], {
     cwd:root,windowsHide:true,stdio:['ignore','pipe','pipe'],
@@ -142,6 +142,7 @@ test('a different server occupying 8765 is not reused or terminated', {
     assert.equal(await response.text(),'OTHER PROCESS');
   } finally {
     hardStop(child);
+    blocker.closeAllConnections();
     await new Promise(resolve => blocker.close(resolve));
   }
 });
