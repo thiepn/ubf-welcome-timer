@@ -26,6 +26,10 @@ if (native?.invoke) {
   let busy = false;
   let targets = [];
   let active = false;
+  // Discard asynchronous monitor polls started before a newer operator
+  // action, or superseded by a later poll. A stale "inactive" result must
+  // never hide Beamer freigeben after the projector has opened.
+  let statusRevision = 0;
 
   function explainError(error) {
     return error instanceof Error ? error.message : String(error);
@@ -51,11 +55,15 @@ if (native?.invoke) {
 
   async function refresh() {
     if (busy) return;
+    const revision = ++statusRevision;
     try {
       const [newTargets, isActive] = await Promise.all([
         invoke('list_projector_targets'),
         invoke('projector_status'),
       ]);
+      // The native result may arrive after open/release or a newer refresh.
+      // Ignore it rather than reversing the operator's successful action.
+      if (busy || revision !== statusRevision) return;
       const selected = selector.value;
       targets = newTargets;
       active = isActive;
@@ -69,6 +77,7 @@ if (native?.invoke) {
       if (targets.some(target => String(target.id) === selected)) selector.value = selected;
       render();
     } catch (error) {
+      if (busy || revision !== statusRevision) return;
       openButton.disabled = true;
       releaseButton.disabled = true;
       state.textContent = 'Windows-Beamerprüfung fehlgeschlagen: ' + explainError(error);
@@ -77,6 +86,7 @@ if (native?.invoke) {
 
   openButton.addEventListener('click', async () => {
     if (busy || active || !targets.length) return;
+    ++statusRevision; // Invalidate any in-flight monitor/status refresh.
     busy = true;
     render();
     try {
@@ -97,6 +107,7 @@ if (native?.invoke) {
 
   releaseButton.addEventListener('click', async () => {
     if (busy || !active) return;
+    ++statusRevision; // Invalidate any in-flight monitor/status refresh.
     busy = true;
     releaseButton.disabled = true;
     try {
