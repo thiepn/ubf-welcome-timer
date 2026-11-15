@@ -330,6 +330,8 @@ class ProjectorTimerBrowserTests(unittest.TestCase):
         expect(project).to_be_enabled(timeout=4000)
         project.click()
         expect(self.control.get_by_role('button', name='Beamer freigeben')).to_be_visible()
+        self.assertIn('startet nicht automatisch',
+                      self.control.locator('#native-projector-state').inner_text())
         self.assertTrue(self.control.evaluate('window.__nativeActive'))
         self.assertFalse(self.control.evaluate('window.__nativePopupWasCalled'))
         self.control.get_by_role('button', name='3 Min.').click()

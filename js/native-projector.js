@@ -43,7 +43,8 @@ if (native?.invoke) {
     openButton.disabled = busy || active || targets.length === 0;
     if (active) {
       state.textContent = 'Projektionsfenster auf externem Bildschirm aktiv. ' +
-        'Zur Übergabe an PowerPoint oder Canva: „Beamer freigeben“.';
+        'PowerPoint/Canva separat bereithalten: „Beamer freigeben“ schließt nur das Timerbild. ' +
+        'Die nächste Präsentation startet nicht automatisch.';
     } else if (!targets.length) {
       state.textContent = 'Kein erweiterter Beamer erkannt. Win + P → Erweitern prüfen.';
     } else if (targets.length > 1) {

@@ -36,7 +36,7 @@ Tauri configuration is in src-tauri/tauri.conf.json. The staged frontend is dist
 - After showing the native window, its actual fullscreen state and current monitor are rechecked against the selected target. Each status poll fails closed if Windows moved it elsewhere; the presence of a WebView2 window alone does not certify projection.
 - Native projection commands reject calls from any window except controller. The projector has no declared Tauri capabilities and the existing JS display remains read-only.
 - When Windows migrates the projection window onto the primary monitor after disconnection, the native status poll closes it.
-- Controller and projector are packaged in the same Tauri app origin/profile; the existing BroadcastChannel and localStorage code is reused, not replaced. Real WebView2 two-window persistence and synchronization remain **NOT TESTED** until exercised on Windows.
+- Controller and projector are packaged in the same Tauri app origin/profile; the existing BroadcastChannel and localStorage code is reused, not replaced. Cross-window synchronization, pause/resume and reopening **passed on Windows Server 2022 CI**. The actual church Windows 11/projector setup remains **NOT TESTED**.
 - The Windows **primary** display is assumed to be the laptop. There is no reliable built-in-panel inference in this initial version: changing primary display to the projector would put the controller there.
 - Closing the projector window frees that monitor for the next application. The operating system and the next presentation program decide what becomes visible next. The Tauri app does not automatically start Canva or PowerPoint.
 - The existing browser-only offline launcher remains the rollback path (Start-Timer.cmd and RUNBOOK_WINDOWS.md).
@@ -45,7 +45,7 @@ Tauri configuration is in src-tauri/tauri.conf.json. The staged frontend is dist
 
 - Actual Windows 11 extended-screen window placement (including projector to the left/negative coordinates).
 - Pixel-accurate 16:9 Canva welcome and ring geometry at physical projector resolution.
-- Same-origin WebView2 controller/display state propagation, pause/resume, refresh and 00:00 recovery (the browser-only synchronization tests do **not** certify real WebView2 cross-window behavior).
+- Same-origin WebView2 controller/display state propagation on the **actual church Windows 11 laptop** (the Windows Server 2022 two-window CI smoke passed, but the physical device has not been tested).
 - Monitor unplug/replug, emergency Beamer freigeben, and no laptop takeover.
 - PowerPoint/Canva live takeover without a desktop flash at the worship handoff.
 - Full Sunday rehearsal with sleep/notification/network handling.
@@ -95,3 +95,15 @@ remain available. The Windows desktop may be briefly visible before a separate
 PowerPoint/Canva presentation covers the external monitor. This application
 **does not launch, activate, or automatically transfer control to PowerPoint
 or Canva**. A seamless handoff is **NOT TESTED** and must not be claimed.
+
+## Physical Windows 11 handoff acceptance
+
+Use [PHYSICAL_ACCEPTANCE_WINDOWS11.md](./PHYSICAL_ACCEPTANCE_WINDOWS11.md)
+for the church laptop/projector rehearsal. All real-device results initially
+remain **NOT_TESTED**. Do not treat a Windows Server CI pass as an actual
+PowerPoint, Canva, HDMI hotplug or external-monitor test.
+
+The documented handoff is deliberately conservative: `Beamer freigeben`
+only closes the timer window. It cannot certify that PowerPoint or Canva has
+already put the audience slide on the correct monitor, and it cannot prevent
+a temporary view of the desktop if another presentation is not ready.
