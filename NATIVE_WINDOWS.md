@@ -32,7 +32,8 @@ Tauri configuration is in src-tauri/tauri.conf.json. The staged frontend is dist
 ## Projection safety
 
 - If no secondary monitor is detected, native projection refuses to start. Duplicate/mirrored monitor geometry is rejected. Never silently put the projector display on the primary screen.
-- Multiple external monitors require an explicit choice; an out-of-date index is rejected.
+- Multiple external monitors require an explicit choice. The selected display is passed as a snapshot-bound identity (name and physical rectangle), not a list index. If Windows reorders, removes or resizes the chosen screen before projection, the command refuses instead of redirecting to another display.
+- After showing the native window, its actual fullscreen state and current monitor are rechecked against the selected target. Each status poll fails closed if Windows moved it elsewhere; the presence of a WebView2 window alone does not certify projection.
 - Native projection commands reject calls from any window except controller. The projector has no declared Tauri capabilities and the existing JS display remains read-only.
 - When Windows migrates the projection window onto the primary monitor after disconnection, the native status poll closes it.
 - Controller and projector are packaged in the same Tauri app origin/profile; the existing BroadcastChannel and localStorage code is reused, not replaced. Real WebView2 two-window persistence and synchronization remain **NOT TESTED** until exercised on Windows.
@@ -44,7 +45,7 @@ Tauri configuration is in src-tauri/tauri.conf.json. The staged frontend is dist
 
 - Actual Windows 11 extended-screen window placement (including projector to the left/negative coordinates).
 - Pixel-accurate 16:9 Canva welcome and ring geometry at physical projector resolution.
-- Same-origin WebView2 controller/display state propagation, pause/resume, refresh and 00:00 recovery.
+- Same-origin WebView2 controller/display state propagation, pause/resume, refresh and 00:00 recovery (the browser-only synchronization tests do **not** certify real WebView2 cross-window behavior).
 - Monitor unplug/replug, emergency Beamer freigeben, and no laptop takeover.
 - PowerPoint/Canva live takeover without a desktop flash at the worship handoff.
 - Full Sunday rehearsal with sleep/notification/network handling.

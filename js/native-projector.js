@@ -80,8 +80,10 @@ if (native?.invoke) {
     busy = true;
     render();
     try {
-      const monitorId = targets.length > 1 ? Number(selector.value) : null;
-      await invoke('open_projector', {monitorId});
+      // Send the exact screen identity from the last visible list. If the
+      // layout changes before Rust opens it, refuse instead of redirecting.
+      const monitorKey = targets.length > 1 ? selector.value : targets[0].id;
+      await invoke('open_projector', {monitorKey});
       await refreshAfterAction();
     } catch (error) {
       state.textContent = 'Projektion nicht gestartet: ' + explainError(error);
