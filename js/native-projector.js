@@ -10,13 +10,22 @@ if (native?.invoke) {
   panel.className = 'native-projection';
   panel.setAttribute('aria-label', 'Native Beamersteuerung');
   panel.innerHTML =
+    '<div class="native-status-heading"><span class="native-status-dot" aria-hidden="true"></span>' +
+    '<span class="native-status-label">NATIVER BEAMER</span></div>' +
     '<p id="native-projector-state" role="status" aria-live="polite">Bildschirme werden geprüft …</p>' +
     '<label id="native-monitor-label" hidden>Beamer auswählen' +
     '<select id="native-monitor"></select></label>' +
+    '<div class="native-projector-actions"></div>' +
     '<button type="button" id="native-projector-release" hidden>Beamer freigeben</button>' +
     '<p class="native-projection-note">Bei Windows muss der Laptop als Hauptanzeige eingerichtet sein. ' +
     'Win + P → Erweitern.</p>';
-  guide.parentNode.insertBefore(panel, guide);
+  const preview = document.querySelector('.mini-preview');
+  preview.parentNode.insertBefore(panel, preview);
+  const actionGroup = panel.querySelector('.native-projector-actions');
+  const release = panel.querySelector('#native-projector-release');
+  openButton.classList.remove('outline', 'top-action');
+  openButton.classList.add('native-open');
+  actionGroup.append(openButton, release);
   guide.hidden = true;
   caption.textContent = 'Vorschau · Die echte Projektion läuft auf dem zweiten Windows-Bildschirm.';
   const state = panel.querySelector('#native-projector-state');
@@ -36,6 +45,7 @@ if (native?.invoke) {
   }
 
   function render() {
+    panel.dataset.status = busy ? 'busy' : active ? 'active' : targets.length ? 'ready' : 'missing';
     selectorLabel.hidden = targets.length <= 1;
     releaseButton.hidden = !active;
     releaseButton.disabled = busy;
@@ -79,6 +89,7 @@ if (native?.invoke) {
       render();
     } catch (error) {
       if (busy || revision !== statusRevision) return;
+      panel.dataset.status = 'error';
       openButton.disabled = true;
       releaseButton.disabled = true;
       state.textContent = 'Windows-Beamerprüfung fehlgeschlagen: ' + explainError(error);
@@ -97,6 +108,7 @@ if (native?.invoke) {
       await invoke('open_projector', {monitorKey});
       await refreshAfterAction();
     } catch (error) {
+      panel.dataset.status = 'error';
       state.textContent = 'Projektion nicht gestartet: ' + explainError(error);
     } finally {
       busy = false;
@@ -115,6 +127,7 @@ if (native?.invoke) {
       await invoke('release_projector');
       await refreshAfterAction();
     } catch (error) {
+      panel.dataset.status = 'error';
       state.textContent = 'Beamer konnte nicht freigegeben werden: ' + explainError(error);
     } finally {
       busy = false;

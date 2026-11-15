@@ -1,45 +1,29 @@
 .native-projection {
-  display: grid;
-  gap: 0.8rem;
-  margin-top: 1rem;
-  padding: 1rem;
-  border: 1px solid #c7d6e4;
-  border-radius: 0.9rem;
-  background: #f6f9fc;
-  color: #143450;
+  margin: 0 0 20px;
+  padding: 17px 18px;
+  border: 1px solid #d0e2f0;
+  border-radius: 12px;
+  background: #f5f9fd;
+  color: #1b3c59;
 }
-.native-projection #native-projector-state {
-  margin: 0;
-  line-height: 1.5;
-}
-.native-projection label {
-  display: grid;
-  gap: 0.4rem;
-  font-weight: 600;
-}
-.native-projection select {
-  width: 100%;
-  padding: 0.6rem;
-  border: 1px solid #8da9c1;
-  border-radius: 0.45rem;
-  background: #fff;
-  color: #143450;
-}
-.native-projection button {
-  padding: 0.75rem 1rem;
-  border-radius: 0.55rem;
-  border: 1px solid #0f5eab;
-  background: #fff;
-  color: #0f5eab;
-  cursor: pointer;
-  font-weight: 700;
-}
-.native-projection button:hover:not(:disabled) { background: #e4eef8; }
-.native-projection button:disabled { opacity: 0.55; cursor: not-allowed; }
-.native-projection .native-projection-note {
-  margin: 0;
-  font-size: 0.8rem;
-  line-height: 1.45;
-  color: #476579;
-}
+.native-status-heading { display: flex; align-items: center; gap: 8px; margin-bottom: 9px; }
+.native-status-dot { width: 8px; height: 8px; border-radius: 50%; background: #9bafc0; box-shadow: 0 0 0 3px #e5edf4; }
+.native-status-label { font-size: 10px; letter-spacing: .14em; font-weight: 800; color: #53718c; }
+.native-projection[data-status="active"] .native-status-dot { background: #269168; box-shadow: 0 0 0 3px #deefe6; }
+.native-projection[data-status="ready"] .native-status-dot { background: var(--blue); box-shadow: 0 0 0 3px #e4effb; }
+.native-projection[data-status="error"] .native-status-dot { background: #bf693b; box-shadow: 0 0 0 3px #f8e9dd; }
+.native-projection #native-projector-state { font-size: 13px; font-weight: 620; line-height: 1.55; margin: 0 0 13px; }
+.native-projection #native-monitor-label { display: grid; gap: 7px; font-size: 12px; font-weight: 710; color: #4b6680; margin: 0 0 13px; }
+.native-projection #native-monitor { width: 100%; min-height: 45px; border: 1px solid #bdd1e1; border-radius: 8px; padding: 10px 12px; font-weight: 640; color: #16354d; background: #fff; }
+.native-projector-actions { display: grid; gap: 9px; }
+.native-projector-actions button { width: 100%; min-height: 46px; border-radius: 9px; padding: 11px 13px; font-size: 13px; font-weight: 760; cursor: pointer; }
+.native-projector-actions .native-open { background: var(--blue); color: #fff; border: 1px solid var(--blue); }
+.native-projector-actions .native-open:hover:not(:disabled) { background: var(--blue-hover); }
+.native-projector-actions #native-projector-release { background: #fff; color: #264966; border: 1px solid #adcadf; }
+.native-projector-actions #native-projector-release:hover:not(:disabled) { background: #e8f2fc; }
+.native-projector-actions button:disabled { opacity: .46; cursor: not-allowed; }
+.native-projection-note { color: #658096; font-size: 11px; line-height: 1.5; margin: 11px 0 0; }
 .native-projection [hidden], .guide[hidden] { display: none !important; }
+@media (max-width: 540px) {
+  .native-projection { padding: 16px; margin-bottom: 17px; }
+}
