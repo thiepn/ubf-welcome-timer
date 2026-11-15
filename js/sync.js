@@ -41,6 +41,20 @@ export class TimerSync {
       this.write(state);
     }
     // An empty store intentionally stays empty until an operator starts a timer.
+    this.connect();
+    this.onState(this.state, {initial:true, empty});
+  }
+
+  // Reattach listeners on a BFCache restore without discarding the in-memory
+  // timer. Storage can be unavailable while the still-loaded timer is valid.
+  resume() {
+    if (this.heartbeat !== null) return;
+    this.connect();
+    this.onState(this.state, {restored:true});
+  }
+
+  connect() {
+    if (this.heartbeat !== null) return;
     if (typeof BroadcastChannel !== 'undefined') {
       try {
         this.channel = new BroadcastChannel(CHANNEL_NAME);
@@ -53,7 +67,6 @@ export class TimerSync {
     this.heartbeat = setInterval(() => this.announce(), 1500);
     this.announce();
     this.requestSnapshot();
-    this.onState(this.state, {initial:true, empty});
     this.onPresence(this.peerLastSeen, Boolean(this.channel));
   }
 
@@ -105,7 +118,15 @@ export class TimerSync {
 
   accept(incoming) {
     if (!isValidState(incoming)) return;
-    if (incoming.revision <= this.state.revision) return;
+    // Revisions are monotonic within a session, not across sessions. After an
+    // unavailable storage write, a restarted controller may start a newer
+    // session at revision 1 while a live display still holds revision 1.
+    if (incoming.sessionId === this.state.sessionId) {
+      if (incoming.revision <= this.state.revision) return;
+    } else {
+      const freshDisplay = this.state.sessionId === 'welcome' && this.state.revision === 0;
+      if (!freshDisplay && incoming.createdAtEpochMs <= this.state.createdAtEpochMs) return;
+    }
     const recovered = recoverState(incoming, Date.now());
     // A stale state cannot resurrect a timer on display refresh.
     if (recovered.issue !== null) {
@@ -135,10 +156,12 @@ export class TimerSync {
   }
 
   close() {
-    if (this.heartbeat) clearInterval(this.heartbeat);
+    if (this.heartbeat !== null) clearInterval(this.heartbeat);
+    this.heartbeat = null;
     removeEventListener('storage', this.storageListener);
     removeEventListener('pageshow', this.visibilityListener);
     removeEventListener('visibilitychange', this.visibilityListener);
     this.channel?.close();
+    this.channel = null;
   }
 }

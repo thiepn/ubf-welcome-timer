@@ -145,6 +145,142 @@ class ProjectorTimerBrowserTests(unittest.TestCase):
         self.assertEqual(self.control.locator('#status-badge').get_attribute('data-phase'),'welcome')
         self.assertNotIn('is-timer',self.display.locator('#stage').get_attribute('class'))
 
+    def test_07_controller_restart_keeps_display_running(self):
+        self.control.get_by_role('button', name='3 Min.').click()
+        self.control.get_by_role('button', name='Countdown starten').click()
+        expect(self.display.locator('#stage')).to_have_class(re.compile(r'is-timer'))
+        self.control.close()
+        self.control = self.context.new_page()
+        self.control.on('pageerror', lambda e: self.errors.append(f'restarted controller: {e}'))
+        self.control.goto(BASE + '/control.html')
+        expect(self.control.locator('#status-badge')).to_have_attribute('data-phase', 'running')
+        self.assertLessEqual(abs(self._seconds(self.display.locator('#timer-numbers').inner_text()) - self._seconds(self.control.locator('#current-time').inner_text())), 1)
+        self.control.get_by_role('button', name='Pausieren').click()
+        expect(self.control.locator('#status-badge')).to_have_attribute('data-phase', 'paused')
+        frozen = self.display.locator('#timer-numbers').inner_text()
+        self.display.wait_for_timeout(1200)
+        self.assertEqual(frozen, self.display.locator('#timer-numbers').inner_text())
+
+    def test_08_local_server_cold_launch_without_external_requests(self):
+        # Block all non-loopback HTTP requests while keeping localhost available.
+        # This does not simulate a fully disabled network adapter.
+        self.context.route(re.compile(r'^https?://(?!127\.0\.0\.1:18765(?:/|$))'), lambda route: route.abort())
+        self.control.close()
+        self.display.close()
+        self.display = self.context.new_page()
+        self.control = self.context.new_page()
+        self.display.on('pageerror', lambda e: self.errors.append(f'offline display: {e}'))
+        self.control.on('pageerror', lambda e: self.errors.append(f'offline controller: {e}'))
+        self.display.goto(BASE + '/display.html')
+        self.control.goto(BASE + '/control.html')
+        self.assertTrue(self.display.locator('img.slide-image--welcome').evaluate('(el) => el.complete && el.naturalWidth > 0'))
+        self.control.get_by_role('button', name='1 Min.').click()
+        self.control.get_by_role('button', name='Countdown starten').click()
+        expect(self.display.locator('#stage')).to_have_class(re.compile(r'is-timer'))
+
+    def test_09_storage_write_denied_still_synchronizes_live(self):
+        self.control.evaluate("""() => {
+          const original = Storage.prototype.setItem;
+          Storage.prototype.setItem = function(k, v) {
+            if (k === 'ubf-koeln-projector-timer:state:v1') throw new DOMException('blocked', 'QuotaExceededError');
+            return original.call(this, k, v);
+          };
+        }""")
+        self.control.get_by_role('button', name='3 Min.').click()
+        self.control.get_by_role('button', name='Countdown starten').click()
+        expect(self.display.locator('#stage')).to_have_class(re.compile(r'is-timer'))
+        expect(self.control.locator('#system-message')).to_be_visible()
+        self.assertIn('Speichern nicht möglich', self.control.locator('#system-message').inner_text())
+
+    def test_10_storage_failure_restart_new_session_reaches_display(self):
+        self.control.add_init_script("""(() => {
+          const original = Storage.prototype.setItem;
+          Storage.prototype.setItem = function(k, v) {
+            if (k === 'ubf-koeln-projector-timer:state:v1') throw new DOMException('blocked', 'QuotaExceededError');
+            return original.call(this, k, v);
+          };
+        })();""")
+        self.control.reload()
+        self.control.get_by_role('button', name='3 Min.').click()
+        self.control.get_by_role('button', name='Countdown starten').click()
+        expect(self.display.locator('#stage')).to_have_class(re.compile(r'is-timer'))
+        expect(self.display.locator('#timer-numbers')).to_have_text(re.compile(r'^0[23]:[0-5][0-9]$'))
+        self.control.wait_for_timeout(100)
+        self.control.reload()
+        self.control.get_by_role('button', name='1 Min.').click()
+        self.control.get_by_role('button', name='Countdown starten').click()
+        expect(self.control.locator('#status-badge')).to_have_attribute('data-phase', 'running')
+        expect(self.display.locator('#timer-numbers')).to_have_text(re.compile(r'^(?:01:00|00:[0-5][0-9])$'), timeout=2000)
+
+    def test_11_second_controller_cannot_start_during_startup(self):
+        second = self.context.new_page()
+        second.on('pageerror', lambda e: self.errors.append(f'second controller: {e}'))
+        try:
+            second.goto(BASE + '/control.html')
+            second.evaluate("() => document.querySelector('#start').click()")
+            self.assertEqual(second.locator('#status-badge').get_attribute('data-phase'), 'welcome')
+            self.assertNotIn('is-timer', self.display.locator('#stage').get_attribute('class'))
+        finally:
+            second.close()
+
+    def test_12_restored_controller_must_not_operate_without_its_lease(self):
+        # Model persisted pagehide/pageshow. A separate display page holds the
+        # exclusive lock, making ownership assertions unambiguous.
+        lock_name = 'ubf-koeln-projector-timer:single-controller:v1'
+        self.control.wait_for_function("""async (name) => {
+          const locks = await navigator.locks.query();
+          return locks.held.some(lock => lock.name === name);
+        }""", arg=lock_name, timeout=5000)
+        self.control.evaluate("""() => window.dispatchEvent(new PageTransitionEvent(
+          'pagehide', {persisted: true}))""")
+        self.display.evaluate("""(name) => {
+          navigator.locks.request(name, {mode: 'exclusive'}, async () => {
+            window.__externalLockHeld = true;
+            await new Promise(resolve => { window.__externalRelease = resolve; });
+          });
+        }""", lock_name)
+        self.display.wait_for_function("() => window.__externalLockHeld === true", timeout=5000)
+        self.control.evaluate("""() => window.dispatchEvent(new PageTransitionEvent(
+          'pageshow', {persisted: true}))""")
+        # Must fail closed until this controller actually owns the lock.
+        expect(self.control.locator('#start')).to_be_disabled(timeout=2000)
+        self.display.evaluate("() => window.__externalRelease()")
+        expect(self.control.locator('#start')).to_be_enabled(timeout=5000)
+        self.control.get_by_role('button', name='3 Min.').click()
+        self.control.get_by_role('button', name='Countdown starten').click()
+        expect(self.display.locator('#stage')).to_have_class(re.compile(r'is-timer'))
+
+    def test_13_restored_display_resubscribes_to_controller_updates(self):
+        # Model persisted pagehide/pageshow, without claiming a real BFCache hit.
+        self.display.evaluate("""() => window.dispatchEvent(new PageTransitionEvent(
+          'pagehide', {persisted: true}))""")
+        self.display.evaluate("""() => window.dispatchEvent(new PageTransitionEvent(
+          'pageshow', {persisted: true}))""")
+        self.control.get_by_role('button', name='3 Min.').click()
+        self.control.get_by_role('button', name='Countdown starten').click()
+        expect(self.display.locator('#stage')).to_have_class(re.compile(r'is-timer'), timeout=3000)
+
+    def test_14_no_web_locks_fallback_warns_and_disables_duplicate_controllers(self):
+        # Fallback detection is advisory, not an atomic lock; test the actual
+        # supported safety behavior after the two tabs have exchanged presence.
+        fallback = self.browser.new_context(viewport={'width':1536,'height':864})
+        try:
+            fallback.add_init_script("""(() => {
+              Object.defineProperty(navigator, 'locks', {value: undefined, configurable: true});
+            })();""")
+            first = fallback.new_page()
+            first.goto(BASE + '/control.html')
+            self.assertFalse(first.evaluate('() => Boolean(navigator.locks?.request)'))
+            second = fallback.new_page()
+            second.goto(BASE + '/control.html')
+            expect(first.locator('#start')).to_be_disabled(timeout=6000)
+            expect(second.locator('#start')).to_be_disabled(timeout=6000)
+            expect(first.locator('#system-message')).to_contain_text('Mehrere Steuerfenster')
+            second.close()
+            expect(first.locator('#start')).to_be_enabled(timeout=8000)
+        finally:
+            fallback.close()
+
     @staticmethod
     def _seconds(s):
         mm,ss = map(int,s.split(':'))

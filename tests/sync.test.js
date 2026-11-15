@@ -75,3 +75,60 @@ test('duplicate controllers are detectable to both operators', async () => {
   try {a.start();b.start();await settle();a.announce();b.announce();await settle();assert.equal(aHasPeer,true);assert.equal(bHasPeer,true);}
   finally {a.close();b.close();}
 });
+
+
+test('new session after a non-persisted controller restart supersedes an old display session', async () => {
+  mem.clear();
+  const previousSet = globalThis.localStorage.setItem;
+  globalThis.localStorage.setItem = () => { throw new Error('storage unavailable'); };
+  const display = new TimerSync('display');
+  const first = new TimerSync('control');
+  let restarted;
+  try {
+    display.start(); first.start(); await settle();
+    first.write(startTimer(first.state, 180000, Date.now(), 'storage-failed-first'));
+    await settle();
+    assert.equal(display.state.sessionId, 'storage-failed-first');
+    const delayedOldSnapshot = display.state;
+    first.close();
+    await settle(5);
+    restarted = new TimerSync('control'); restarted.start();
+    await settle();
+    restarted.write(startTimer(restarted.state, 60000, Date.now()+100, 'storage-failed-second'));
+    await settle();
+    assert.equal(display.state.sessionId, 'storage-failed-second');
+    assert.equal(display.state.durationMs, 60000);
+    display.accept(delayedOldSnapshot);
+    assert.equal(display.state.sessionId, 'storage-failed-second', 'delayed old session must not rewind the projector');
+  } finally {
+    first.close(); restarted?.close(); display.close();
+    globalThis.localStorage.setItem = previousSet;
+  }
+});
+
+
+test('restored display reconnects and catches updates missed during page suspension', async () => {
+  mem.clear();
+  const controller = new TimerSync('control');
+  const display = new TimerSync('display');
+  try {
+    controller.start(); display.start(); await settle();
+    const running = startTimer(controller.state, 180000, Date.now(), 'restore-test');
+    controller.write(running);
+    await settle();
+    assert.equal(display.state.phase, 'running');
+    display.close();
+    const paused = pauseTimer(running, Date.now() + 1000);
+    controller.write(paused);
+    await settle();
+    assert.equal(display.state.phase, 'running');
+    display.resume();
+    await settle();
+    assert.equal(display.state.phase, 'paused');
+    assert.equal(display.state.revision, paused.revision);
+    display.close();
+    display.resume();
+    await settle();
+    assert.equal(display.state.phase, 'paused');
+  } finally { controller.close(); display.close(); }
+});
