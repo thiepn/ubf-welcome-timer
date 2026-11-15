@@ -127,6 +127,10 @@ async fn smoke_focus_check(app: tauri::AppHandle, window: WebviewWindow) -> Resu
         f64::from(p.x), f64::from(p.y),
     )).map_err(|e| e.to_string())?;
     fullscreen.show().map_err(|e| e.to_string())?;
+    // The audience WebView is deliberately non-focusable. On a single-screen
+    // CI runner it may be occluded and its JS timer throttled indefinitely.
+    // Query Win32 physical fullscreen state from the focused controller.
+    controller.eval(OBSERVE_FULLSCREEN).map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -142,20 +146,21 @@ const OBSERVE_FOCUS: &str = r#"
 
 #[tauri::command]
 fn smoke_fullscreen_check(app: tauri::AppHandle, window: WebviewWindow) -> Result<bool, String> {
-    if window.label() != "ci-fullscreen" {
-        return Err("CI fullscreen assertion is restricted to its test window".into());
+    if window.label() != "controller" {
+        return Err("Only the CI operator controller can inspect fullscreen bounds".into());
     }
-    let monitor = window.primary_monitor().map_err(|e| e.to_string())?
+    let fullscreen = app.get_webview_window("ci-fullscreen")
+        .ok_or("CI fullscreen display window missing")?;
+    let monitor = fullscreen.primary_monitor().map_err(|e| e.to_string())?
         .ok_or("No Windows CI primary monitor")?;
     let mpos = monitor.position();
     let msize = monitor.size();
-    let p = window.inner_position().map_err(|e| e.to_string())?;
-    let s = window.inner_size().map_err(|e| e.to_string())?;
+    let p = fullscreen.inner_position().map_err(|e| e.to_string())?;
+    let s = fullscreen.inner_size().map_err(|e| e.to_string())?;
     let max_error = 2_u32;
-    let controller = app.get_webview_window("controller").ok_or("Controller missing")?;
-    let controller_focused = controller.is_focused().map_err(|e| e.to_string())?;
-    let display_focused = window.is_focused().map_err(|e| e.to_string())?;
-    let pass = window.is_fullscreen().map_err(|e| e.to_string())?
+    let controller_focused = window.is_focused().map_err(|e| e.to_string())?;
+    let display_focused = fullscreen.is_focused().map_err(|e| e.to_string())?;
+    let pass = fullscreen.is_fullscreen().map_err(|e| e.to_string())?
         && controller_focused && !display_focused
         && p.x.abs_diff(mpos.x) <= max_error
         && p.y.abs_diff(mpos.y) <= max_error
@@ -318,7 +323,8 @@ fn main() {
                 "ci-display" => webview.eval(OBSERVE_RUNNING),
                 "ci-return-display" => webview.eval(OBSERVE_REOPENED),
                 "ci-focus" => webview.eval(OBSERVE_FOCUS),
-                "ci-fullscreen" => webview.eval(OBSERVE_FULLSCREEN),
+                // Fullscreen verification runs from controller because this
+                // intentionally non-focusable audience WebView can be occluded.
                 _ => return,
             };
             if let Err(error) = result {
