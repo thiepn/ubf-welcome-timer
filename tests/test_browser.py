@@ -265,9 +265,9 @@ class ProjectorTimerBrowserTests(unittest.TestCase):
         # supported safety behavior after the two tabs have exchanged presence.
         fallback = self.browser.new_context(viewport={'width':1536,'height':864})
         try:
-            fallback.add_init_script("""() => {
+            fallback.add_init_script("""(() => {
               Object.defineProperty(navigator, 'locks', {value: undefined, configurable: true});
-            }""")
+            })();""")
             first = fallback.new_page()
             first.goto(BASE + '/control.html')
             self.assertFalse(first.evaluate('() => Boolean(navigator.locks?.request)'))
