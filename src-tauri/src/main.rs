@@ -315,6 +315,39 @@ fn projector_status(
 fn main() {
     tauri::Builder::default()
         .manage(ProjectorRegistry::default())
+        .on_window_event(|window, event| {
+            if window.label() != "projector" {
+                return;
+            }
+            let app = window.app_handle().clone();
+            if matches!(event, tauri::WindowEvent::Destroyed) {
+                let _ = app.state::<ProjectorRegistry>().set(None);
+                return;
+            }
+            if !matches!(event,
+                tauri::WindowEvent::Moved(_)
+                | tauri::WindowEvent::Resized(_)
+                | tauri::WindowEvent::ScaleFactorChanged { .. }
+            ) {
+                return;
+            }
+            // Windows can relocate a fullscreen presentation onto the laptop
+            // when an HDMI projector disconnects. Validate the actual monitor
+            // and physical bounds on the native event, rather than waiting
+            // for the controller's three-second polling fallback.
+            tauri::async_runtime::spawn(async move {
+                let registry = app.state::<ProjectorRegistry>();
+                let Ok(Some(expected_key)) = registry.expected() else { return; };
+                let Some(controller) = app.get_webview_window("controller") else { return; };
+                let Some(projector) = app.get_webview_window("projector") else { return; };
+                if !matches!(validate_projector(&controller, &projector, &expected_key), Ok(true)) {
+                    // Hiding first reduces the chance of an accidental laptop
+                    // takeover before the projector window is destroyed.
+                    let _ = projector.hide();
+                    let _ = close_failed_projection(&projector, &registry);
+                }
+            });
+        })
         .setup(|app| {
             // Only the Windows primary display is used for controls. On the
             // church laptop, set the built-in panel as the primary screen.
