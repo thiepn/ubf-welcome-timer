@@ -223,6 +223,30 @@ class ProjectorTimerBrowserTests(unittest.TestCase):
         finally:
             second.close()
 
+    def test_12_restored_controller_reacquires_exclusive_ownership(self):
+        # Exercise the lifecycle callbacks that a back/forward cache restore uses.
+        # This is a synthetic event test; it does not prove browser BFCache eligibility.
+        lock_name = 'ubf-koeln-projector-timer:single-controller:v1'
+        self.control.wait_for_function("""async (name) => {
+          const locks = await navigator.locks.query();
+          return locks.held.some(lock => lock.name === name);
+        }""", arg=lock_name, timeout=5000)
+        self.control.evaluate("""() => window.dispatchEvent(new PageTransitionEvent(
+          'pagehide', {persisted: true}))""")
+        self.control.wait_for_function("""async (name) => {
+          const locks = await navigator.locks.query();
+          return !locks.held.some(lock => lock.name === name);
+        }""", arg=lock_name, timeout=5000)
+        self.control.evaluate("""() => window.dispatchEvent(new PageTransitionEvent(
+          'pageshow', {persisted: true}))""")
+        self.control.wait_for_function("""async (name) => {
+          const locks = await navigator.locks.query();
+          return locks.held.some(lock => lock.name === name);
+        }""", arg=lock_name, timeout=5000)
+        self.control.get_by_role('button', name='3 Min.').click()
+        self.control.get_by_role('button', name='Countdown starten').click()
+        expect(self.display.locator('#stage')).to_have_class(re.compile(r'is-timer'))
+
     @staticmethod
     def _seconds(s):
         mm,ss = map(int,s.split(':'))
