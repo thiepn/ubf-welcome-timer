@@ -408,6 +408,32 @@ class ProjectorTimerBrowserTests(unittest.TestCase):
                         'Stale status concealed Beamer freigeben after successful projection')
         self.assertTrue(self.control.evaluate('window.__nativeActive'))
 
+    def test_18_in_flight_status_must_not_resurrect_a_released_projection(self):
+        # Opposite handoff race: the cached "active" answer must not revive
+        # release controls after Beamer freigeben has closed the projection.
+        self.control.add_init_script(script=NATIVE_BRIDGE_MOCK)
+        self.control.reload()
+        project = self.control.get_by_role('button', name='Auf Beamer projizieren')
+        release = self.control.get_by_role('button', name='Beamer freigeben')
+        expect(project).to_be_enabled(timeout=4000)
+        project.click()
+        expect(release).to_be_visible(timeout=2000)
+        self.control.evaluate("""() => {
+          window.__nativeDelayNextStatus = true;
+          window.dispatchEvent(new Event('focus'));
+        }""")
+        self.control.wait_for_function('window.__nativePendingStatus.length === 1')
+        release.click()
+        expect(project).to_be_enabled(timeout=2000)
+        expect(release).to_be_hidden(timeout=2000)
+        self.control.evaluate('window.__nativePendingStatus.shift()()')
+        self.control.wait_for_timeout(100)
+        self.assertTrue(project.is_enabled(),
+                        'Stale status prevents reprojecting after release')
+        self.assertTrue(release.is_hidden(),
+                        'Stale active status resurrected release control after handoff')
+        self.assertFalse(self.control.evaluate('window.__nativeActive'))
+
     @staticmethod
     def _seconds(s):
         mm,ss = map(int,s.split(':'))
