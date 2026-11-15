@@ -26,7 +26,11 @@ async function portInUse() {
   });
 }
 
-if (await portInUse()) {
+const nodeMajor = Number(process.versions.node.split('.')[0]);
+if (!Number.isSafeInteger(nodeMajor) || nodeMajor < 20) {
+  console.error(`Node.js 20 or newer is required; detected ${process.version}. The timer server was not started.`);
+  process.exitCode = 1;
+} else if (await portInUse()) {
   console.error(`Port ${port} is already in use. Close any previous timer window/server before relaunching.`);
   process.exitCode = 1;
 } else {
@@ -38,9 +42,24 @@ if (await portInUse()) {
   let childError = null;
   let stopping = false;
   server.on('error', error => {childError = error;});
-  const shutdown = () => { stopping = true; if (!server.killed) server.kill(); };
+  const shutdown = () => {
+    if (stopping) return;
+    stopping = true;
+    if (server.exitCode === null && !server.killed) server.kill();
+  };
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);
+  // Explicit operator shutdown ensures the local server is released before
+  // the batch window exits. Also works with piped input in Windows CI.
+  let inputBuffer = '';
+  const onInput = chunk => {
+    inputBuffer += String(chunk);
+    const lines = inputBuffer.split(/\r?\n/);
+    inputBuffer = lines.pop() || '';
+    if (lines.some(line => line.trim().toLowerCase() === 'q')) shutdown();
+  };
+  process.stdin.setEncoding('utf8');
+  process.stdin.on('data', onInput);
   let ready = false;
   for (let i = 0; i < 40; i += 1) {
     if (childError || server.exitCode !== null) break;
@@ -61,6 +80,7 @@ if (await portInUse()) {
     console.log(`Controller: ${controllerUrl}`);
     console.log('Projector:  http://127.0.0.1:8765/display.html');
     console.log('No internet connection or npm install is needed during operation.');
+    console.log('To stop the timer safely, type q and press Enter in this window.');
     if (process.platform === 'win32' && !noBrowser) {
       const opener = spawn('cmd.exe', ['/d', '/c', `start "" "${controllerUrl}"`], {
         windowsHide: true,
@@ -74,5 +94,9 @@ if (await portInUse()) {
     if (server.exitCode !== null) resolve(server.exitCode);
     else server.once('exit', code => resolve(code));
   });
+  process.stdin.off('data', onInput);
+  process.stdin.pause();
+  process.off('SIGINT', shutdown);
+  process.off('SIGTERM', shutdown);
   if (!stopping && (childError || childExit !== 0 || !ready)) process.exitCode = 1;
 }
