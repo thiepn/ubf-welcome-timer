@@ -154,6 +154,12 @@ test('operator graceful stop frees port and a subsequent double-click restart wo
     const launch=runCmd();
     try {
       await waitForController();
+      // The server can answer before launch-local.mjs finishes its own readiness
+      // probe. Only send q once the operator prompt is actually available.
+      for (let i = 0; i < 100 && !launch.output.includes('To stop the timer safely'); i++) {
+        await delay(50);
+      }
+      assert.match(launch.output, /To stop the timer safely/, 'Launcher was not ready: ' + launch.output);
       launch.child.stdin.write('q\r\n');
       launch.child.stdin.end();
       const status=await waitForExit(launch.child,4000).catch(error => { throw new Error(error.message + '; launcher output: ' + launch.output); });
