@@ -127,10 +127,35 @@ async fn smoke_focus_check(app: tauri::AppHandle, window: WebviewWindow) -> Resu
         f64::from(p.x), f64::from(p.y),
     )).map_err(|e| e.to_string())?;
     fullscreen.show().map_err(|e| e.to_string())?;
-    // Exact production order: only AFTER fullscreen positioning + show,
-    // restore laptop controller focus. The fullscreen API can activate
-    // the display even when focusable(false) was requested at construction.
+    // Reproduction gate: emulate a user switching to a *different*
+    // presentation window while fullscreen placement is still settling.
+    // This is a second real Windows WebView2 window, NOT PowerPoint/Canva.
+    // Production records controller focus BEFORE creating/showing the
+    // projector and unconditionally restores it afterward.
+    let presentation = WebviewWindowBuilder::new(
+        &app, "ci-presentation", WebviewUrl::App("display.html".into()),
+    )
+    .title("CI-only focusable presentation stand-in (not PowerPoint)")
+    .focused(false)
+    .inner_size(480.0, 300.0)
+    .build().map_err(|e| e.to_string())?;
+    presentation.set_focus().map_err(|e| e.to_string())?;
+    tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+    if !presentation.is_focused().map_err(|e| e.to_string())?
+        || controller.is_focused().map_err(|e| e.to_string())? {
+        return Err("WEBVIEW2_FOCUS_RACE_INCONCLUSIVE: CI competitor could not obtain Windows focus".into());
+    }
+    println!("WEBVIEW2_FOCUS_RACE_SETUP: presentation window obtained Windows focus while the projector was opening");
+    // OLD production behavior, intentionally duplicated until this proves
+    // a failure: operator_had_focus was true at command initiation.
     controller.set_focus().map_err(|e| e.to_string())?;
+    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    if !presentation.is_focused().map_err(|e| e.to_string())? {
+        eprintln!("WEBVIEW2_FOCUS_RACE_REPRO: delayed controller restoration stole focus from newly selected presentation window");
+        app.exit(1);
+        return Ok(());
+    }
+    println!("WEBVIEW2_FOCUS_RACE_PASS: presentation remained focused after timer opening");
     // A one-monitor CI runner can occlude either WebView2 and suspend its JS
     // timers despite a correct native window state. Check directly from Rust.
     for _ in 0..50 {
