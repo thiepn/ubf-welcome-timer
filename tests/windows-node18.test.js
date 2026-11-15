@@ -10,7 +10,7 @@ test('Windows CMD launcher rejects unsupported Node.js 18 before serving any pag
   timeout:15000,
 }, async () => {
   const child=spawn('cmd.exe',['/d','/c','Start-Timer.cmd'], {
-    cwd:root,env:{...process.env,UBF_TIMER_NO_BROWSER:'1'},
+    cwd:root,env:{...process.env,UBF_TIMER_NO_BROWSER:'1',UBF_TIMER_NONINTERACTIVE:'1'},
     windowsHide:true,stdio:['pipe','pipe','pipe'],
   });
   let output='';
