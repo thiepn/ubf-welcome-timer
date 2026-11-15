@@ -41,6 +41,20 @@ export class TimerSync {
       this.write(state);
     }
     // An empty store intentionally stays empty until an operator starts a timer.
+    this.connect();
+    this.onState(this.state, {initial:true, empty});
+  }
+
+  // Reattach listeners on a BFCache restore without discarding the in-memory
+  // timer. Storage can be unavailable while the still-loaded timer is valid.
+  resume() {
+    if (this.heartbeat !== null) return;
+    this.connect();
+    this.onState(this.state, {restored:true});
+  }
+
+  connect() {
+    if (this.heartbeat !== null) return;
     if (typeof BroadcastChannel !== 'undefined') {
       try {
         this.channel = new BroadcastChannel(CHANNEL_NAME);
@@ -53,7 +67,6 @@ export class TimerSync {
     this.heartbeat = setInterval(() => this.announce(), 1500);
     this.announce();
     this.requestSnapshot();
-    this.onState(this.state, {initial:true, empty});
     this.onPresence(this.peerLastSeen, Boolean(this.channel));
   }
 
@@ -143,10 +156,12 @@ export class TimerSync {
   }
 
   close() {
-    if (this.heartbeat) clearInterval(this.heartbeat);
+    if (this.heartbeat !== null) clearInterval(this.heartbeat);
+    this.heartbeat = null;
     removeEventListener('storage', this.storageListener);
     removeEventListener('pageshow', this.visibilityListener);
     removeEventListener('visibilitychange', this.visibilityListener);
     this.channel?.close();
+    this.channel = null;
   }
 }
