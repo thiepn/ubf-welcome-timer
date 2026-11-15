@@ -51,27 +51,24 @@ async fn smoke_report(
                 println!(
                     "WEBVIEW2_SMOKE_PASS: live start/pause/resume, display release and reopening preserved timer"
                 );
-                // Separate single-monitor native fullscreen test on the CI
-                // runner. This does NOT emulate an extended projector.
-                let controller = app.get_webview_window("controller").ok_or("Controller missing")?;
-                let monitor = controller.primary_monitor().map_err(|e| e.to_string())?
-                    .ok_or("No Windows CI primary monitor")?;
-                let p = monitor.position();
-                let fullscreen = WebviewWindowBuilder::new(
-                    &app, "ci-fullscreen", WebviewUrl::App("display.html".into()),
+                // Reproduce the operator-focus risk using a real Windows
+                // WebView2 window, the same builder and show sequence as the
+                // production projector. This CI runner has ONE monitor.
+                let focus_probe = WebviewWindowBuilder::new(
+                    &app, "ci-focus", WebviewUrl::App("display.html".into()),
                 )
-                .title("CI-only fullscreen physical bounds probe")
+                .title("CI-only projector focus probe")
                 .visible(false)
                 .decorations(false)
                 .resizable(false)
                 .build()
                 .map_err(|e| e.to_string())?;
-                fullscreen.set_position(PhysicalPosition::new(p.x, p.y))
-                    .map_err(|e| e.to_string())?;
-                fullscreen.set_fullscreen_on_monitor(PhysicalPosition::new(
-                    f64::from(p.x), f64::from(p.y),
-                )).map_err(|e| e.to_string())?;
-                fullscreen.show().map_err(|e| e.to_string())?;
+                let controller = app.get_webview_window("controller").ok_or("Controller missing")?;
+                controller.set_focus().map_err(|e| e.to_string())?;
+                if !controller.is_focused().map_err(|e| e.to_string())? {
+                    return Err("WEBVIEW2_FOCUS_INCONCLUSIVE: controller cannot obtain Windows focus".into());
+                }
+                focus_probe.show().map_err(|e| e.to_string())?;
             }
             _ => return Err(format!("Unexpected native smoke signal: {} / {phase}", window.label())),
         }
@@ -83,6 +80,51 @@ async fn smoke_report(
     }
     result
 }
+
+#[tauri::command]
+async fn smoke_focus_check(app: tauri::AppHandle, window: WebviewWindow) -> Result<(), String> {
+    if window.label() != "ci-focus" {
+        return Err("Focus probe must originate in the CI test display".into());
+    }
+    let controller = app.get_webview_window("controller").ok_or("Controller missing")?;
+    let controller_focused = controller.is_focused().map_err(|e| e.to_string())?;
+    let display_focused = window.is_focused().map_err(|e| e.to_string())?;
+    if !controller_focused {
+        eprintln!("WEBVIEW2_FOCUS_REPRO: projector show stole operator focus; controller={controller_focused} display={display_focused}");
+        app.exit(1);
+        return Ok(());
+    }
+    println!("WEBVIEW2_FOCUS_PASS: projector opening preserved Windows controller focus");
+    window.close().map_err(|e| e.to_string())?;
+    // Continue the existing single-monitor physical fullscreen smoke.
+    let monitor = controller.primary_monitor().map_err(|e| e.to_string())?
+        .ok_or("No Windows CI primary monitor")?;
+    let p = monitor.position();
+    let fullscreen = WebviewWindowBuilder::new(
+        &app, "ci-fullscreen", WebviewUrl::App("display.html".into()),
+    )
+    .title("CI-only fullscreen physical bounds probe")
+    .visible(false)
+    .decorations(false)
+    .resizable(false)
+    .build().map_err(|e| e.to_string())?;
+    fullscreen.set_position(PhysicalPosition::new(p.x, p.y)).map_err(|e| e.to_string())?;
+    fullscreen.set_fullscreen_on_monitor(PhysicalPosition::new(
+        f64::from(p.x), f64::from(p.y),
+    )).map_err(|e| e.to_string())?;
+    fullscreen.show().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+const OBSERVE_FOCUS: &str = r#"
+(() => {
+  setTimeout(() => {
+    window.__TAURI__.core.invoke('smoke_focus_check').catch(error => {
+      console.error('WEBVIEW2_FOCUS_CHECK_ERROR: ' + String(error));
+    });
+  }, 400);
+})();
+"#;
 
 #[tauri::command]
 fn smoke_fullscreen_check(app: tauri::AppHandle, window: WebviewWindow) -> Result<bool, String> {
@@ -257,6 +299,7 @@ fn main() {
                 "controller" => webview.eval(START_COUNTDOWN),
                 "ci-display" => webview.eval(OBSERVE_RUNNING),
                 "ci-return-display" => webview.eval(OBSERVE_REOPENED),
+                "ci-focus" => webview.eval(OBSERVE_FOCUS),
                 "ci-fullscreen" => webview.eval(OBSERVE_FULLSCREEN),
                 _ => return,
             };
@@ -278,7 +321,7 @@ fn main() {
             .build()?;
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![smoke_report, smoke_fullscreen_check])
+        .invoke_handler(tauri::generate_handler![smoke_report, smoke_focus_check, smoke_fullscreen_check])
         .run(tauri::generate_context!())
         .expect("Native WebView2 smoke could not initialize");
 }
