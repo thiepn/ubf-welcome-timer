@@ -17,6 +17,7 @@ if not exist "server.mjs" goto missing_files
 if not exist "assets\welcome.png" goto missing_files
 if not exist "assets\background-clean.png" goto missing_files
 if not exist "scripts\launch-local.mjs" goto missing_files
+if not exist "scripts\browser-open.mjs" goto missing_files
 
 echo UBF Koeln Projector Timer - local offline launch
 echo Keep this window open while using the projector.
