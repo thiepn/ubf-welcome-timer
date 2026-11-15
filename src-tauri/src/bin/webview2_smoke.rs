@@ -127,6 +127,10 @@ async fn smoke_focus_check(app: tauri::AppHandle, window: WebviewWindow) -> Resu
         f64::from(p.x), f64::from(p.y),
     )).map_err(|e| e.to_string())?;
     fullscreen.show().map_err(|e| e.to_string())?;
+    // Exact production order: only AFTER fullscreen positioning + show,
+    // restore laptop controller focus. The fullscreen API can activate
+    // the display even when focusable(false) was requested at construction.
+    controller.set_focus().map_err(|e| e.to_string())?;
     // A one-monitor CI runner can occlude either WebView2 and suspend its JS
     // timers despite a correct native window state. Check directly from Rust.
     for _ in 0..50 {
