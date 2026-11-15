@@ -127,10 +127,16 @@ async fn smoke_focus_check(app: tauri::AppHandle, window: WebviewWindow) -> Resu
         f64::from(p.x), f64::from(p.y),
     )).map_err(|e| e.to_string())?;
     fullscreen.show().map_err(|e| e.to_string())?;
-    // The audience WebView is deliberately non-focusable. On a single-screen
-    // CI runner it may be occluded and its JS timer throttled indefinitely.
-    // Query Win32 physical fullscreen state from the focused controller.
-    controller.eval(OBSERVE_FULLSCREEN).map_err(|e| e.to_string())?;
+    // A one-monitor CI runner can occlude either WebView2 and suspend its JS
+    // timers despite a correct native window state. Check directly from Rust.
+    for _ in 0..50 {
+        if smoke_fullscreen_check(app.clone(), controller.clone())? {
+            return Ok(());
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    }
+    eprintln!("WEBVIEW2_FULLSCREEN_FAIL: native fullscreen bounds never matched in 5s");
+    app.exit(1);
     Ok(())
 }
 
@@ -144,7 +150,6 @@ const OBSERVE_FOCUS: &str = r#"
 })();
 "#;
 
-#[tauri::command]
 fn smoke_fullscreen_check(app: tauri::AppHandle, window: WebviewWindow) -> Result<bool, String> {
     if window.label() != "controller" {
         return Err("Only the CI operator controller can inspect fullscreen bounds".into());
@@ -172,25 +177,6 @@ fn smoke_fullscreen_check(app: tauri::AppHandle, window: WebviewWindow) -> Resul
     }
     Ok(pass)
 }
-
-const OBSERVE_FULLSCREEN: &str = r#"
-(() => {
-  let attempts = 0;
-  const ticker = setInterval(async () => {
-    try {
-      if (await window.__TAURI__.core.invoke('smoke_fullscreen_check')) {
-        clearInterval(ticker);
-      } else if (++attempts >= 50) {
-        clearInterval(ticker);
-        console.error('WEBVIEW2_FULLSCREEN_FAIL: 5s without matching physical bounds');
-      }
-    } catch (error) {
-      clearInterval(ticker);
-      console.error('WEBVIEW2_FULLSCREEN_FAIL: ' + String(error));
-    }
-  }, 100);
-})();
-"#;
 
 const START_COUNTDOWN: &str = r#"
 (() => {
@@ -345,7 +331,7 @@ fn main() {
             .build()?;
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![smoke_report, smoke_focus_check, smoke_fullscreen_check])
+        .invoke_handler(tauri::generate_handler![smoke_report, smoke_focus_check])
         .run(tauri::generate_context!())
         .expect("Native WebView2 smoke could not initialize");
 }
