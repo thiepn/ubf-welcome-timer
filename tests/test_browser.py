@@ -193,13 +193,13 @@ class ProjectorTimerBrowserTests(unittest.TestCase):
         self.assertIn('Speichern nicht möglich', self.control.locator('#system-message').inner_text())
 
     def test_10_storage_failure_restart_new_session_reaches_display(self):
-        self.control.add_init_script("""() => {
+        self.control.add_init_script("""(() => {
           const original = Storage.prototype.setItem;
           Storage.prototype.setItem = function(k, v) {
             if (k === 'ubf-koeln-projector-timer:state:v1') throw new DOMException('blocked', 'QuotaExceededError');
             return original.call(this, k, v);
           };
-        }""")
+        })();""")
         self.control.reload()
         self.control.get_by_role('button', name='3 Min.').click()
         self.control.get_by_role('button', name='Countdown starten').click()
