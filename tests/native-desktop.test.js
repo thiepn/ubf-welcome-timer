@@ -42,7 +42,7 @@ test('native actions are restricted to the controller and display is read-only',
   assert.equal(config.bundle.active, false);
   const main = file('src-tauri/src/main.rs');
   for (const name of ['list_projector_targets','open_projector','release_projector','projector_status']) {
-    assert.match(main, new RegExp('fn ' + name + '\\\\('));
+    assert.match(main, new RegExp('fn ' + name + '\\('));
   }
   assert.match(main, /window\.label\(\) != "controller"/);
   assert.match(main, /set_fullscreen_on_monitor/);
