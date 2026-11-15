@@ -1,0 +1,72 @@
+# UBF Köln Beamer-Timer — Bedienkarte für die Windows-11-Probe
+
+**NUR TESTBETRIEB — SONNTAGSGOTTESDIENST: NO_GO.** Keine Installation,
+Veröffentlichung oder Vor-Ort-Abnahme wurde durch dieses Dokument ausgeführt.
+Diese Karte begleitet die
+[acht verbindlichen Tests W01–W08](./PHYSICAL_ACCEPTANCE_WINDOWS11.md).
+Ergebnisse müssen von den Personen **am realen Laptop und Beamer** stammen.
+
+## Vor dem Test
+
+1. **Nativen Build tatsächlich vorhanden?** Der Entwurf hat keinen Installer.
+   Nur mit freigegebenem lokalem Entwicklungs-Build testen
+   (Buildanleitung in [NATIVE_WINDOWS.md](./NATIVE_WINDOWS.md)).
+   Ohne nativen Build: **NOT_TESTED**, keinen Browserlauf als native Abnahme werten.
+2. Beamer verbinden, **Win + P → Erweitern** wählen; unter
+   **Einstellungen → System → Bildschirm** kontrollieren, dass das
+   Laptop-Panel die *Hauptanzeige* bleibt. Bildschirmnummern, Auflösung,
+   Skalierung und Anordnung notieren.
+3. Netzteil anschließen, Benachrichtigungen unterdrücken, Ruhezustand
+   während der Probe verhindern. Eine zweite Person schaut ausschließlich
+   auf das Zuschauerbild des Beamers.
+4. PowerPoint-Datei und Canva-Präsentation (falls vorgesehen) vorher
+   bereithalten. Canva benötigt möglicherweise Netzwerk; die
+   Offlineprüfung W02 betrifft den **nativen Timer**, nicht Canva.
+
+## Sichere Abfolge am Bedienplatz
+
+| Phase | Bedienhandlung | Muss sichtbar sein |
+| --- | --- | --- |
+| Projektionsstart | Im nativen Controller **Auf Beamer projizieren** | Nur Welcome-Folie auf dem Beamer, nur Steuerung auf dem Laptop |
+| Timertest | 00:10 wählen, starten, pausieren, fortsetzen und 00:00 abwarten | Countdown und Ring synchron, keine Anzeige privater Steuerelemente |
+| Probe PowerPoint | Zielmonitor in PowerPoint **Bildschirmpräsentation → Monitore** prüfen; Referentenansicht und Publikumsansicht unterscheiden | Publikum sieht niemals Notizen/Steuerung |
+| Übergabe | **Beamer freigeben**; anschließend das separat vorbereitete Publikumsfenster nutzen | Timerfenster geschlossen; nächstes Programm startet **nicht automatisch** |
+| Probe Canva | **Präsentationsansicht** und **Vollbild** getrennt testen; Teilnehmenden- und Präsentationsfenster auseinanderhalten | Teilnehmendenfenster auf dem Beamer; Notizen nur auf dem Laptop |
+| Rückweg | Timer erneut **Auf Beamer projizieren**; bei Störung manuell auf getesteten Fallback wechseln | Steuerung und Countdown bleiben erhalten |
+
+**Handoff-Reihenfolge für W05/W06 separat vergleichen:** Eine bereits
+gestartete Präsentation kann den Timer verdecken; eine erst nach
+`Beamer freigeben` gestartete Präsentation kann kurz den Desktop zeigen.
+Beide Fälle aus dem Zuschauerraum beobachten. **Nichts davon ist als
+nahtlos zertifiziert.** Weder PowerPoint noch Canva werden vom Timer
+automatisch gestartet oder fokussiert.
+
+## Sofortiger Testabbruch
+
+Bei falschem Bildschirm, privater Referentenansicht im Publikumsbild,
+Steuerungs-/Fokusverlust, unerwartetem Countdown-Reset, Desktop-/Taskleisten-
+Einblendung oder Beamerabzug mit Laptop-Übernahme: **FAIL**, Test stoppen,
+beobachteten Ablauf notieren. Keine spontane Reparatur während eines
+Gottesdienstes.
+
+**Rückfallweg ist nicht identisch mit nativer Projektion:** Die bisherige
+`Start-Timer.cmd`-Variante braucht Node.js 20+ und einen vollständig
+entpackten Projektordner. Sie startet einen lokalen Browser-Controller;
+das Display muss auf den Beamer gezogen und mit F11 maximiert werden.
+Alternativ kann die unveränderte `assets/welcome.png` als statisches
+Bild genutzt werden. W08 erst PASS setzen, wenn der tatsächlich
+vor Ort verfügbare Rückfallweg real vorgeführt wurde.
+
+## Ergebnis erfassen
+
+In [PHYSICAL_ACCEPTANCE_WINDOWS11.md](./PHYSICAL_ACCEPTANCE_WINDOWS11.md)
+für **jeden** Test W01–W08 `PASS`, `FAIL` oder `NOT_TESTED`
+mit Beobachtung, Systemkonfiguration und Build-SHA erfassen.
+Ein anderer CI-PASS ersetzt keinen dieser acht Vor-Ort-Tests.
+**Sonntagseinsatz bleibt NO_GO**, solange irgendein Pflichttest nicht
+als tatsächlich bestanden dokumentiert ist.
+
+Weitere offizielle Hinweise:
+[Microsoft: PowerPoint auf zwei Bildschirmen](https://support.microsoft.com/en-us/powerpoint/present-on-multiple-monitors-and-view-speaker-notes-privately)
+und
+[Canva: Präsentationsmodi](https://www.canva.com/de_de/help/presentation-modes/).

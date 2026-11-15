@@ -18,6 +18,21 @@ No F11, dragging a window or browser popup should be necessary. A native fullscr
 
 ## Build / development
 
+**Keine verteilbare App steht bereit:** Der Entwurf hat
+`bundle.active: false` und wurde weder installiert noch als Release
+bereitgestellt. Die folgenden Befehle sind ausschließlich ein **lokaler
+Entwicklungs- und Abnahmepfad**, keine bereits durchgeführte Installation.
+Für den realen Kirchengerätetest muss zuerst ein autorisierter,
+nachweislich lauffähiger Build am konkreten Windows-11-Gerät vorliegen.
+Die Browser-Version aus `Start-Timer.cmd` ist kein Test der nativen
+Monitor-Automatik.
+
+Vor Ort die kompakte [Bedienkarte](./HANDOFF_OPERATOR_CARD_DE.md)
+und die [W01–W08-Abnahmematrix](./PHYSICAL_ACCEPTANCE_WINDOWS11.md)
+verwenden. Fehlende echte Geräteergebnisse bleiben `NOT_TESTED`.
+
+
+
 Prerequisites: Windows 11, Rust stable MSVC toolchain and Microsoft C++ Build Tools; Tauri 2 uses installed Edge WebView2. Node.js 20+ is needed to **build**, not to run the compiled app.
 
 From the repository root:

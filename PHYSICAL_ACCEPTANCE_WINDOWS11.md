@@ -21,6 +21,19 @@ deaktiviert; **Win + P → Erweitern**, nicht Duplizieren. Unter
 **Hauptbildschirm** sein. Den nativen Entwurfsstand ausschließlich in einem
 nicht-öffentlichen Probelauf testen. Nicht im Gottesdienst erproben.
 
+**Zugangshürde:** Für den nativen Entwurf gibt es derzeit **keine freigegebene
+Windows-Installationsdatei**. Ein GitHub-Actions-PASS und der Browser-Fallback
+installieren die native App nicht. Ein lokaler Test erfordert einen autorisierten,
+aus exakt dokumentiertem Quellstand erzeugten Entwicklungs-Build. Dazu sind
+Windows 11, Node.js 20+, Rust stable (MSVC), Microsoft C++ Build Tools und
+WebView2 nötig; Befehle stehen in [NATIVE_WINDOWS.md](./NATIVE_WINDOWS.md).
+Ohne lauffähigen nativen Build W01–W07 **NOT_TESTED** lassen, nicht als PASS
+oder als App-FAIL auslegen. Hier wurde kein Build auf dem Kirchenlaptop erzeugt.
+
+**Kurzablauf für die Person am Laptop:** [HANDOFF_OPERATOR_CARD_DE.md](./HANDOFF_OPERATOR_CARD_DE.md).
+Vor Testbeginn nach Möglichkeit eine zweite Person am Zuschauerplatz
+aufstellen; sie beurteilt nur das **echte Projektorbild**, nicht die Laptop-Vorschau.
+
 ## Acht verbindliche Abnahmetests
 
 | ID | Durchführung | PASS-Kriterium | Beobachtung |
@@ -39,18 +52,62 @@ Monitor-Koordinaten), verschiedene Windows-Skalierungsfaktoren (100/125/150 %),
 Auflösungswechsel und Projektor-Aus-/Einschalten prüfen. Nur beobachtete
 Ergebnisse als PASS markieren; nicht mögliche Fälle bleiben NOT_TESTED.
 
+## Nachweise und Ergebnisprotokoll (erst vor Ort ausfüllen)
+
+Die tatsächliche Ausführung dokumentieren, nicht CI-Ergebnisse übertragen.
+Je Test W01–W08 den Zustand **PASS / FAIL / NOT_TESTED** und eine knappe
+Beobachtung eintragen. Bei FAIL einen reproduzierbaren Ablauf notieren und
+den Live-Einsatz stoppen. Ein fehlender Build / fehlender Beamer ist
+**NOT_TESTED**, kein PASS und kein beobachteter App-Defekt.
+
+| Feld | Eintrag durch Testperson |
+| --- | --- |
+| Exakte getestete Commit-SHA / Build-Quelle | NOT_TESTED |
+| Testzeitraum, verantwortliche Person | NOT_TESTED |
+| Beamer- und Laptop-Modell, HDMI-/Adapterkette | NOT_TESTED |
+| Display 1/2: Hauptanzeige, Auflösung, Skalierung, Anordnung | NOT_TESTED |
+| W01 Status / Beobachtung | NOT_TESTED |
+| W02 Status / Beobachtung | NOT_TESTED |
+| W03 Status / Beobachtung | NOT_TESTED |
+| W04 Status / Beobachtung | NOT_TESTED |
+| W05 PowerPoint: Status / unerwünschte Sichtbarkeit / Umschaltverhalten | NOT_TESTED |
+| W06 Canva: Status / unerwünschte Sichtbarkeit / Umschaltverhalten | NOT_TESTED |
+| W07 Kabel-/Beamertrennung: Status / Laptop-Übernahme | NOT_TESTED |
+| W08 Rückfallweg: Status / tatsächlich verfügbarer Startweg | NOT_TESTED |
+| Zeitliche Unterbrechung / Desktop-Anzeige beim Übergang | NOT_TESTED |
+| Beobachtungen aus Zuschauerperspektive (Foto/Video nur nach Zustimmung) | NOT_TESTED |
+| Verantwortliche Entscheidung für Testbetrieb / Live-Einsatz | NO_GO |
+
+**Messregel bei W05/W06:** Aus dem Zuschauerraum beobachten und
+dokumentieren, ob Desktop, Taskleiste, private Referentenansicht,
+Benachrichtigungen oder ein falsches Fenster sichtbar werden. Eine
+„erfolgreiche“ Übergabe darf nicht bloß daraus abgeleitet werden, dass
+nachträglich die korrekte Folie erscheint. Bei sichtbarer Störung FAIL
+notieren; nicht durch einen pauschalen CI-PASS ersetzen. Nicht heimlich
+Teilnehmende aufnehmen; wenn kein Video möglich ist, schriftliche
+Beobachtung durch die zweite Testperson.
+
 ## Übergabe an PowerPoint und Canva
 
-**PowerPoint:** Über *Bildschirmpräsentation → Monitore* die tatsächliche
-Beamer-Ausgabe wählen; *Referentenansicht* auf dem Laptop und die
-Publikumsfolie auf dem Beamer vorab bestätigen. „Automatisch“ nicht als
-gesicherte Bildschirmwahl behandeln. PowerPoint kann Anzeigeeinstellungen
-beim Start oder Ende einer Präsentation ändern.
+**PowerPoint:** Die Desktop-Version verwenden. Unter
+*Bildschirmpräsentation → Monitore* die Beamer-Ausgabe explizit prüfen;
+*Referentenansicht* muss auf dem Laptop, die **Folienansicht ohne Notizen**
+auf dem Projektor liegen. „Automatisch“ nicht als gesicherte Bildschirmwahl
+behandeln. **Zwei getrennte Proben:** (a) PowerPoint-Präsentation vor dem
+Timerstart vorbereitet/gestartet, danach Timer davor projizieren und
+`Beamer freigeben`; (b) PowerPoint erst nach Freigabe starten. Falls
+Variante (a) den Timer vorher verdeckt oder (b) Desktop/Taskleiste zeigt,
+genau das notieren, statt eine unterbrechungsfreie Übergabe zu behaupten.
+PowerPoint kann Anzeigeeinstellungen beim Start/Ende ändern.
 
-**Canva:** Bei *Präsentationsansicht* öffnet Canva ein getrenntes
-Publikums- und Präsentationsfenster. Das Publikumsfenster muss vor der
-Übergabe dem Beamer zugeordnet sein; bei *Vollbild* den richtigen Bildschirm
-überprüfen.
+**Canva:** Bei *Präsentationsansicht* öffnet Canva zwei Fenster:
+**Teilnehmendenfenster** (ohne Notizen) und **Präsentationsfenster** (mit
+Notizen/Vorschau). Vor dem Handoff die tatsächliche Zuordnung auf Laptop
+und Projektor prüfen; im Modus *Vollbild* den richtigen Bildschirm separat
+testen. Canva kann seine Fensterzuordnung ändern; diese nie stillschweigend
+annehmen. Die Offlinefähigkeit des nativen Timers bedeutet **nicht**, dass
+Canva ohne Netzwerk zuverlässig lädt. Für W06 den realen Netzwerkzustand
+dokumentieren.
 
 Der Timer öffnet weder PowerPoint noch Canva automatisch.
 **Beamer freigeben schließt nur das Timerfenster.** Eine kurze
