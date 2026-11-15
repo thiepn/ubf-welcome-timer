@@ -145,6 +145,100 @@ class ProjectorTimerBrowserTests(unittest.TestCase):
         self.assertEqual(self.control.locator('#status-badge').get_attribute('data-phase'),'welcome')
         self.assertNotIn('is-timer',self.display.locator('#stage').get_attribute('class'))
 
+    def test_07_controller_restart_keeps_display_running(self):
+        self.control.get_by_role('button', name='3 Min.').click()
+        self.control.get_by_role('button', name='Countdown starten').click()
+        expect(self.display.locator('#stage')).to_have_class(re.compile(r'is-timer'))
+        self.control.close()
+        self.control = self.context.new_page()
+        self.control.on('pageerror', lambda e: self.errors.append(f'restarted controller: {e}'))
+        self.control.goto(BASE + '/control.html')
+        expect(self.control.locator('#status-badge')).to_have_attribute('data-phase', 'running')
+        self.assertLessEqual(abs(self._seconds(self.display.locator('#timer-numbers').inner_text()) - self._seconds(self.control.locator('#current-time').inner_text())), 1)
+        self.control.get_by_role('button', name='Pausieren').click()
+        expect(self.control.locator('#status-badge')).to_have_attribute('data-phase', 'paused')
+        frozen = self.display.locator('#timer-numbers').inner_text()
+        self.display.wait_for_timeout(1200)
+        self.assertEqual(frozen, self.display.locator('#timer-numbers').inner_text())
+
+    def test_08_local_server_cold_launch_without_external_requests(self):
+        # Block all non-loopback HTTP requests while keeping localhost available.
+        # This does not simulate a fully disabled network adapter.
+        self.context.route(re.compile(r'^https?://(?!127\.0\.0\.1:18765(?:/|$))'), lambda route: route.abort())
+        self.control.close()
+        self.display.close()
+        self.display = self.context.new_page()
+        self.control = self.context.new_page()
+        self.display.on('pageerror', lambda e: self.errors.append(f'offline display: {e}'))
+        self.control.on('pageerror', lambda e: self.errors.append(f'offline controller: {e}'))
+        self.display.goto(BASE + '/display.html')
+        self.control.goto(BASE + '/control.html')
+        self.assertTrue(self.display.locator('img.slide-image--welcome').evaluate('(el) => el.complete && el.naturalWidth > 0'))
+        self.control.get_by_role('button', name='1 Min.').click()
+        self.control.get_by_role('button', name='Countdown starten').click()
+        expect(self.display.locator('#stage')).to_have_class(re.compile(r'is-timer'))
+
+    def test_09_storage_write_denied_still_synchronizes_live(self):
+        self.control.evaluate("""() => {
+          const original = Storage.prototype.setItem;
+          Storage.prototype.setItem = function(k, v) {
+            if (k === 'ubf-koeln-projector-timer:state:v1') throw new DOMException('blocked', 'QuotaExceededError');
+            return original.call(this, k, v);
+          };
+        }""")
+        self.control.get_by_role('button', name='3 Min.').click()
+        self.control.get_by_role('button', name='Countdown starten').click()
+        expect(self.display.locator('#stage')).to_have_class(re.compile(r'is-timer'))
+        expect(self.control.locator('#system-message')).to_be_visible()
+        self.assertIn('Speichern nicht möglich', self.control.locator('#system-message').inner_text())
+
+    def test_10_storage_failure_restart_new_session_reaches_display(self):
+        self.control.add_init_script("""() => {
+          const original = Storage.prototype.setItem;
+          Storage.prototype.setItem = function(k, v) {
+            if (k === 'ubf-koeln-projector-timer:state:v1') throw new DOMException('blocked', 'QuotaExceededError');
+            return original.call(this, k, v);
+          };
+        }""")
+        self.control.reload()
+        self.control.get_by_role('button', name='3 Min.').click()
+        self.control.get_by_role('button', name='Countdown starten').click()
+        expect(self.display.locator('#stage')).to_have_class(re.compile(r'is-timer'))
+        expect(self.display.locator('#timer-numbers')).to_have_text(re.compile(r'^0[23]:[0-5][0-9]
+        mm,ss = map(int,s.split(':'))
+        return mm*60+ss
+
+
+if __name__ == '__main__':
+    unittest.main()
+))
+        self.control.wait_for_timeout(100)
+        self.control.reload()
+        self.control.get_by_role('button', name='1 Min.').click()
+        self.control.get_by_role('button', name='Countdown starten').click()
+        expect(self.control.locator('#status-badge')).to_have_attribute('data-phase', 'running')
+        # Equal revision in a new session must not strand the live display at 03:00.
+        expect(self.display.locator('#timer-numbers')).to_have_text(re.compile(r'^(?:01:00|00:[0-5][0-9])
+        mm,ss = map(int,s.split(':'))
+        return mm*60+ss
+
+
+if __name__ == '__main__':
+    unittest.main()
+), timeout=2000)
+
+    def test_11_second_controller_cannot_start_during_startup(self):
+        second = self.context.new_page()
+        second.on('pageerror', lambda e: self.errors.append(f'second controller: {e}'))
+        try:
+            second.goto(BASE + '/control.html')
+            second.evaluate("() => document.querySelector('#start').click()")
+            # Refuse commands before presence heartbeats can elect a single owner.
+            self.assertEqual(second.locator('#status-badge').get_attribute('data-phase'), 'welcome')
+            self.assertNotIn('is-timer', self.display.locator('#stage').get_attribute('class'))
+        finally:
+            second.close()
+
     @staticmethod
     def _seconds(s):
         mm,ss = map(int,s.split(':'))
