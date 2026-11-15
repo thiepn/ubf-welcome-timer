@@ -436,6 +436,63 @@ class ProjectorTimerBrowserTests(unittest.TestCase):
                         'Stale active status resurrected release control after handoff')
         self.assertFalse(self.control.evaluate('window.__nativeActive'))
 
+    def test_19_responsive_regie_layout_preserves_real_timer_controls(self):
+        # Desktop: real controls remain primary; audience preview is separate.
+        left = self.control.locator('.main-panel').bounding_box()
+        right = self.control.locator('.side-panel').bounding_box()
+        self.assertLess(left['x'] + left['width'], right['x'] + 2)
+        self.assertTrue(self.control.locator('#open-display').is_visible())
+        self.assertTrue(self.control.locator('#mini-preview img.preview-welcome').evaluate(
+            '(img) => img.complete && img.naturalWidth > 0'))
+        self.assertTrue(self.control.evaluate(
+            'document.documentElement.scrollWidth <= window.innerWidth + 1'))
+
+        # Compact viewport must stack the actual controls, not merely crop
+        # the operator panel or show a horizontal scroll bar.
+        self.control.set_viewport_size({'width': 390, 'height': 844})
+        left = self.control.locator('.main-panel').bounding_box()
+        right = self.control.locator('.side-panel').bounding_box()
+        self.assertGreaterEqual(right['y'], left['y'] + left['height'] - 2)
+        self.assertTrue(self.control.evaluate(
+            'document.documentElement.scrollWidth <= window.innerWidth + 1'))
+        for selector in ('#start', '#reset', '#welcome', '.preset.active'):
+            self.assertGreaterEqual(self.control.locator(selector).bounding_box()['height'], 40)
+        self.control.get_by_role('button', name='3 Min.').click()
+        self.control.get_by_role('button', name='Countdown starten').click()
+        expect(self.control.locator('#status-badge')).to_have_attribute('data-phase', 'running')
+        self.control.get_by_role('button', name='Pausieren').click()
+        expect(self.control.locator('#status-badge')).to_have_attribute('data-phase', 'paused')
+        self.control.get_by_role('button', name='Willkommensfolie anzeigen').click()
+        expect(self.control.locator('#status-badge')).to_have_attribute('data-phase', 'welcome')
+
+    def test_20_native_projector_actions_are_grouped_next_to_preview(self):
+        # Browser-only Tauri mock: verifies DOM order, accessibility and
+        # state transitions; does not claim physical native WebView2 behavior.
+        self.control.add_init_script(script=NATIVE_BRIDGE_MOCK)
+        self.control.reload()
+        self.control.set_viewport_size({'width': 390, 'height': 844})
+        project = self.control.get_by_role('button', name='Auf Beamer projizieren')
+        release = self.control.get_by_role('button', name='Beamer freigeben')
+        expect(project).to_be_enabled(timeout=4000)
+        self.assertTrue(self.control.evaluate("""() => {
+          const panel = document.querySelector('.native-projection');
+          return panel?.contains(document.querySelector('#open-display')) &&
+                 panel.contains(document.querySelector('#native-projector-release')) &&
+                 panel.nextElementSibling?.id === 'mini-preview' &&
+                 document.querySelector('.guide').hidden;
+        }"""))
+        self.assertTrue(self.control.evaluate(
+            'document.documentElement.scrollWidth <= window.innerWidth + 1'))
+        project.click()
+        expect(release).to_be_visible(timeout=2000)
+        expect(self.control.locator('.native-projection')).to_have_attribute('data-status', 'active')
+        release.click()
+        expect(project).to_be_enabled(timeout=2000)
+        expect(release).to_be_hidden(timeout=2000)
+        expect(self.control.locator('.native-projection')).to_have_attribute('data-status', 'ready')
+        self.assertTrue(self.control.evaluate(
+            'document.documentElement.scrollWidth <= window.innerWidth + 1'))
+
     @staticmethod
     def _seconds(s):
         mm,ss = map(int,s.split(':'))
