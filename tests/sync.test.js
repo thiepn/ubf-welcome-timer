@@ -102,3 +102,30 @@ test('new session after a non-persisted controller restart supersedes an old dis
     globalThis.localStorage.setItem = previousSet;
   }
 });
+
+
+test('restored display reconnects and catches updates missed during page suspension', async () => {
+  mem.clear();
+  const controller = new TimerSync('control');
+  const display = new TimerSync('display');
+  try {
+    controller.start(); display.start(); await settle();
+    const running = startTimer(controller.state, 180000, Date.now(), 'restore-test');
+    controller.write(running);
+    await settle();
+    assert.equal(display.state.phase, 'running');
+    display.close();
+    const paused = pauseTimer(running, Date.now() + 1000);
+    controller.write(paused);
+    await settle();
+    assert.equal(display.state.phase, 'running');
+    display.resume();
+    await settle();
+    assert.equal(display.state.phase, 'paused');
+    assert.equal(display.state.revision, paused.revision);
+    display.close();
+    display.resume();
+    await settle();
+    assert.equal(display.state.phase, 'paused');
+  } finally { controller.close(); display.close(); }
+});
