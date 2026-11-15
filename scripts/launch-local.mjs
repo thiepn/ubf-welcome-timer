@@ -57,7 +57,10 @@ if (!Number.isSafeInteger(nodeMajor) || nodeMajor < 20) {
     inputBuffer += String(chunk);
     const lines = inputBuffer.split(/\r?\n/);
     inputBuffer = lines.pop() || '';
-    if (lines.some(line => line.trim().toLowerCase() === 'q')) shutdown();
+    if (lines.some(line => line.trim().toLowerCase() === 'q')) {
+      console.log('Stopping the local timer server...');
+      shutdown();
+    }
   };
   process.stdin.setEncoding('utf8');
   process.stdin.on('data', onInput);
