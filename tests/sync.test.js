@@ -89,6 +89,7 @@ test('new session after a non-persisted controller restart supersedes an old dis
     first.write(startTimer(first.state, 180000, Date.now(), 'storage-failed-first'));
     await settle();
     assert.equal(display.state.sessionId, 'storage-failed-first');
+    const delayedOldSnapshot = display.state;
     first.close();
     await settle(5);
     restarted = new TimerSync('control'); restarted.start();
@@ -97,6 +98,8 @@ test('new session after a non-persisted controller restart supersedes an old dis
     await settle();
     assert.equal(display.state.sessionId, 'storage-failed-second');
     assert.equal(display.state.durationMs, 60000);
+    display.accept(delayedOldSnapshot);
+    assert.equal(display.state.sessionId, 'storage-failed-second', 'delayed old session must not rewind the projector');
   } finally {
     first.close(); restarted?.close(); display.close();
     globalThis.localStorage.setItem = previousSet;
