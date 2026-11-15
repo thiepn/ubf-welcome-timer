@@ -3,14 +3,14 @@ setlocal
 cd /d "%~dp0"
 if errorlevel 1 (
   echo ERROR: The timer folder cannot be opened.
-  pause
+  if not "%UBF_TIMER_NONINTERACTIVE%"=="1" pause
   exit /b 1
 )
 where node.exe >nul 2>nul
 if errorlevel 1 (
   echo ERROR: Node.js was not found. Install Node.js 20 or newer before Sunday service.
   echo This launcher needs Node.js, but does NOT need an internet connection during use.
-  pause
+  if not "%UBF_TIMER_NONINTERACTIVE%"=="1" pause
   exit /b 1
 )
 if not exist "server.mjs" goto missing_files
@@ -27,7 +27,7 @@ node "scripts\launch-local.mjs"
 if errorlevel 1 (
   echo.
   echo Timer stopped with an error. Read the message above.
-  pause
+  if not "%UBF_TIMER_NONINTERACTIVE%"=="1" pause
   exit /b 1
 )
 exit /b 0
@@ -35,5 +35,5 @@ exit /b 0
 :missing_files
 echo ERROR: Required timer files are missing.
 echo Extract the WHOLE ZIP before running Start-Timer.cmd.
-pause
+if not "%UBF_TIMER_NONINTERACTIVE%"=="1" pause
 exit /b 1
