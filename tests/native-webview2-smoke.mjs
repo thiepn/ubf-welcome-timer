@@ -41,7 +41,8 @@ child.on('exit', code => {
       !output.includes('WEBVIEW2_FOCUS_RELEASE_PASS:') ||
       !output.includes('WEBVIEW2_FOCUS_RACE_PASS:') ||
       !output.includes('WEBVIEW2_FULLSCREEN_PASS:') ||
-      !output.includes('WEBVIEW2_SAME_LABEL_REOPEN_PASS:')) {
+      !output.includes('WEBVIEW2_SAME_LABEL_REOPEN_PASS:') ||
+      !output.includes('WEBVIEW2_DESTROYED_ORDER_PASS:')) {
     console.error('WEBVIEW2_SMOKE_FAIL: native process did not prove same-profile timer propagation.');
     process.exitCode=1;
   } else {
