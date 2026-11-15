@@ -223,9 +223,9 @@ class ProjectorTimerBrowserTests(unittest.TestCase):
         finally:
             second.close()
 
-    def test_12_restored_controller_reacquires_exclusive_ownership(self):
-        # Exercise the lifecycle callbacks that a back/forward cache restore uses.
-        # This is a synthetic event test; it does not prove browser BFCache eligibility.
+    def test_12_restored_controller_must_not_operate_without_its_lease(self):
+        # Model persisted pagehide/pageshow. A separate display page holds the
+        # exclusive lock, making ownership assertions unambiguous.
         lock_name = 'ubf-koeln-projector-timer:single-controller:v1'
         self.control.wait_for_function("""async (name) => {
           const locks = await navigator.locks.query();
@@ -233,19 +233,32 @@ class ProjectorTimerBrowserTests(unittest.TestCase):
         }""", arg=lock_name, timeout=5000)
         self.control.evaluate("""() => window.dispatchEvent(new PageTransitionEvent(
           'pagehide', {persisted: true}))""")
-        self.control.wait_for_function("""async (name) => {
-          const locks = await navigator.locks.query();
-          return !locks.held.some(lock => lock.name === name);
-        }""", arg=lock_name, timeout=5000)
+        self.display.evaluate("""(name) => {
+          navigator.locks.request(name, {mode: 'exclusive'}, async () => {
+            window.__externalLockHeld = true;
+            await new Promise(resolve => { window.__externalRelease = resolve; });
+          });
+        }""", lock_name)
+        self.display.wait_for_function("() => window.__externalLockHeld === true", timeout=5000)
         self.control.evaluate("""() => window.dispatchEvent(new PageTransitionEvent(
           'pageshow', {persisted: true}))""")
-        self.control.wait_for_function("""async (name) => {
-          const locks = await navigator.locks.query();
-          return locks.held.some(lock => lock.name === name);
-        }""", arg=lock_name, timeout=5000)
+        # Must fail closed until this controller actually owns the lock.
+        expect(self.control.locator('#start')).to_be_disabled(timeout=2000)
+        self.display.evaluate("() => window.__externalRelease()")
+        expect(self.control.locator('#start')).to_be_enabled(timeout=5000)
         self.control.get_by_role('button', name='3 Min.').click()
         self.control.get_by_role('button', name='Countdown starten').click()
         expect(self.display.locator('#stage')).to_have_class(re.compile(r'is-timer'))
+
+    def test_13_restored_display_resubscribes_to_controller_updates(self):
+        # Model persisted pagehide/pageshow, without claiming a real BFCache hit.
+        self.display.evaluate("""() => window.dispatchEvent(new PageTransitionEvent(
+          'pagehide', {persisted: true}))""")
+        self.display.evaluate("""() => window.dispatchEvent(new PageTransitionEvent(
+          'pageshow', {persisted: true}))""")
+        self.control.get_by_role('button', name='3 Min.').click()
+        self.control.get_by_role('button', name='Countdown starten').click()
+        expect(self.display.locator('#stage')).to_have_class(re.compile(r'is-timer'), timeout=3000)
 
     @staticmethod
     def _seconds(s):
