@@ -44,4 +44,7 @@ sync.start();
 document.body.classList.remove('loading');
 function frame() { render(); requestAnimationFrame(frame); }
 requestAnimationFrame(frame);
-addEventListener('pagehide', () => sync.close(), {once:true});
+addEventListener('pagehide', () => sync.close());
+addEventListener('pageshow', (event) => {
+  if (event.persisted) sync.resume();
+});
