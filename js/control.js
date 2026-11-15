@@ -162,7 +162,7 @@ function tryAcquireControlLease() {
     });
 }
 tryAcquireControlLease();
-const ownershipInterval = setInterval(tryAcquireControlLease, 1500);
+let ownershipInterval = setInterval(tryAcquireControlLease, 1500);
 
 function command(operation) {
   if (lockedByOtherController) return;
@@ -227,7 +227,19 @@ setInterval(tick, 100);
 tick();
 addEventListener('pagehide', () => {
   controlClosed = true;
+  // A suspended page must never retain an enabled operator UI without its lock.
+  lockedByOtherController = true;
+  controlsLeaseHeld = false;
   clearInterval(ownershipInterval);
   releaseControls?.();
   sync.close();
-}, {once:true});
+  render();
+});
+addEventListener('pageshow', (event) => {
+  if (!event.persisted || !controlClosed) return;
+  controlClosed = false;
+  controlsLeaseHeld = !exclusiveControlSupported;
+  sync.resume();
+  tryAcquireControlLease();
+  ownershipInterval = setInterval(tryAcquireControlLease, 1500);
+});
