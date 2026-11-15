@@ -172,6 +172,15 @@ async fn smoke_focus_check(app: tauri::AppHandle, window: WebviewWindow) -> Resu
     // timers despite a correct native window state. Check directly from Rust.
     for _ in 0..50 {
         if smoke_fullscreen_check(app.clone(), controller.clone())? {
+            // Test *the production label*, not ci-display/ci-return-display.
+            // A posted close can return before the old WebView label is free.
+            if let Err(error) = probe_immediate_same_label_reopen(app.clone()).await {
+                eprintln!("WEBVIEW2_SAME_LABEL_REOPEN_FAIL: {error}");
+                app.exit(1);
+            } else {
+                println!("WEBVIEW2_SAME_LABEL_REOPEN_PASS: immediate production-label reuse succeeded");
+                app.exit(0);
+            }
             return Ok(());
         }
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
@@ -189,6 +198,44 @@ async fn smoke_focus_check(app: tauri::AppHandle, window: WebviewWindow) -> Resu
     eprintln!("WEBVIEW2_FULLSCREEN_FAIL: native fullscreen bounds never matched in 5s");
     app.exit(1);
     Ok(())
+}
+
+// A test-only Windows reproduction of release_projector -> open_projector
+// using the *exact* "projector" label required by production. No external
+// monitor exists on the CI runner; this probes window-label lifetime only.
+async fn probe_immediate_same_label_reopen(app: tauri::AppHandle) -> Result<(), String> {
+    let first = WebviewWindowBuilder::new(
+        &app, "projector", WebviewUrl::App("display.html".into()),
+    )
+    .title("CI first projector — same-label release/reopen")
+    .visible(false)
+    .focused(false)
+    .focusable(false)
+    .build().map_err(|e| format!("first projector creation: {e}"))?;
+    first.show().map_err(|e| format!("first projector show: {e}"))?;
+    if app.get_webview_window("projector").is_none() {
+        return Err("first projector missing before release".into());
+    }
+    first.close().map_err(|e| format!("first projector release: {e}"))?;
+    // Critically no sleep/retry between close and reopen: matches a rapid
+    // operator transition. A rejected duplicate label is consequential.
+    match WebviewWindowBuilder::new(
+        &app, "projector", WebviewUrl::App("display.html".into()),
+    )
+    .title("CI second projector — same label")
+    .visible(false)
+    .focused(false)
+    .focusable(false)
+    .build() {
+        Ok(second) => {
+            second.close().map_err(|e| format!("second projector close: {e}"))?;
+            Ok(())
+        }
+        Err(error) => {
+            eprintln!("WEBVIEW2_SAME_LABEL_REPRO: immediate reopen rejected after close: {error}");
+            Err(format!("immediate reopen: {error}"))
+        }
+    }
 }
 
 const OBSERVE_FOCUS: &str = r#"
@@ -229,7 +276,6 @@ fn smoke_fullscreen_check(app: tauri::AppHandle, window: WebviewWindow) -> Resul
         && s.height.abs_diff(msize.height) <= max_error;
     if pass {
         println!("WEBVIEW2_FULLSCREEN_PASS: real Windows fullscreen content rectangle matches the CI monitor's physical pixels");
-        app.exit(0);
     }
     Ok(pass)
 }
