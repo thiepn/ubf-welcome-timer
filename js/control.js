@@ -29,6 +29,13 @@ const presets = [...document.querySelectorAll('[data-duration]')];
 const clock = new TimerClock();
 let state;
 let lockedByOtherController = false;
+// The Web Locks API prevents commands during the BroadcastChannel startup race.
+// In older browsers, retain the existing presence-based fallback.
+const exclusiveControlSupported = Boolean(globalThis.navigator?.locks?.request);
+let controlsLeaseHeld = !exclusiveControlSupported;
+let acquiringControl = false;
+let releaseControls = null;
+let controlClosed = false;
 let selectedDuration = 300000;
 let lastWarning = '';
 let lastClockReview = 0;
@@ -109,7 +116,8 @@ function onPresence(peers, channelAvailable) {
   const others = [...peers.values()].filter(p => now - p.seenAt <= 4500);
   const displays = others.filter(p => p.role === 'display');
   const controllers = others.filter(p => p.role === 'control');
-  lockedByOtherController = controllers.length > 0;
+  const awaitingLease = exclusiveControlSupported && !controlsLeaseHeld;
+  lockedByOtherController = controllers.length > 0 || awaitingLease;
   if (!channelAvailable) {
     connection.textContent = 'Verbindungsstatus nicht nachweisbar; lokale Synchronisierung kann weiterhin funktionieren.';
     connectionDot.classList.remove('connected');
@@ -119,8 +127,11 @@ function onPresence(peers, channelAvailable) {
       : 'Kein Projektionsfenster erkannt';
     connectionDot.classList.toggle('connected', displays.length > 0);
   }
-  if (lockedByOtherController) {
+  if (controllers.length > 0) {
     setWarning('Mehrere Steuerfenster erkannt. Bitte alle bis auf eines schließen; Timeraktionen sind vorübergehend gesperrt.');
+  } else if (awaitingLease) {
+    connection.textContent = 'Warte auf exklusiven Steuerzugriff.';
+    connectionDot.classList.remove('connected');
   } else if (lastWarning.includes('Mehrere Steuerfenster')) {
     lastWarning = '';
     message.hidden = true;
@@ -130,6 +141,28 @@ function onPresence(peers, channelAvailable) {
 
 const sync = new TimerSync('control', {onState, onPresence, onIssue:setWarning});
 sync.start();
+
+function tryAcquireControlLease() {
+  if (!exclusiveControlSupported || controlsLeaseHeld || acquiringControl || controlClosed) return;
+  acquiringControl = true;
+  void navigator.locks.request('ubf-koeln-projector-timer:single-controller:v1',
+    {mode:'exclusive', ifAvailable:true}, async (lock) => {
+      acquiringControl = false;
+      if (!lock || controlClosed) return;
+      controlsLeaseHeld = true;
+      onPresence(sync.peerLastSeen, Boolean(sync.channel));
+      await new Promise(resolve => { releaseControls = resolve; });
+      controlsLeaseHeld = false;
+      releaseControls = null;
+      if (!controlClosed) onPresence(sync.peerLastSeen, Boolean(sync.channel));
+    }).catch(() => {
+      acquiringControl = false;
+      onPresence(sync.peerLastSeen, Boolean(sync.channel));
+      setWarning('Exklusiver Steuerzugriff ist derzeit nicht verfügbar.');
+    });
+}
+tryAcquireControlLease();
+const ownershipInterval = setInterval(tryAcquireControlLease, 1500);
 
 function command(operation) {
   if (lockedByOtherController) return;
@@ -192,4 +225,9 @@ function tick() {
 }
 setInterval(tick, 100);
 tick();
-addEventListener('pagehide', () => sync.close(), {once:true});
+addEventListener('pagehide', () => {
+  controlClosed = true;
+  clearInterval(ownershipInterval);
+  releaseControls?.();
+  sync.close();
+}, {once:true});
