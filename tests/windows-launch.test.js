@@ -156,7 +156,7 @@ test('operator graceful stop frees port and a subsequent double-click restart wo
       await waitForController();
       launch.child.stdin.write('q\r\n');
       launch.child.stdin.end();
-      const status=await waitForExit(launch.child,4000);
+      const status=await waitForExit(launch.child,4000).catch(error => { throw new Error(error.message + '; launcher output: ' + launch.output); });
       assert.equal(status,0,'Shutdown exit status: '+launch.output);
       await waitForPortClosed();
     } finally { hardStop(launch.child); }
