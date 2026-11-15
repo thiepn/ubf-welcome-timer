@@ -52,7 +52,7 @@ test('Windows double-click CMD launcher serves local controller, display and Can
 });
 
 
-import {createServer} from 'node:net';
+import {createServer} from 'node:http';
 import {mkdtempSync, copyFileSync, rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 
