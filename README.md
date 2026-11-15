@@ -2,27 +2,19 @@
 
 A small static website for Sunday-service welcome projection. The public display remains open on the projector while an operator privately starts, pauses, resumes, resets, or cancels a countdown on the same computer.
 
-**Status:** Local implementation. **Not deployed**. Automated JavaScript, synchronization and repository path checks are included. See TEST_REPORT.md for the current results. Real-browser/physical-projector acceptance is still required.
+**Status (15 November 2026):** Public GitHub source on `main`, but **GitHub Pages remains disabled and no release is published**. The merged baseline `d15cb451b5f65528a7e88541d417cb9d49ddbcb2` passed **23 Node and 14 Chromium automated tests** (Actions `43689422924`). **Windows 11 and physical projector acceptance are still NOT TESTED.** This branch also prepares a local offline-first Windows launcher; its separate CI results must be checked on the exact PR HEAD.
 
-## Start on Windows 11
+## Start on Windows 11 (offline-first)
 
-1. Install Node.js 20+ (if not already installed).
-2. Open a terminal in this project folder.
-3. Run:
+1. Install **Node.js 20+** before the service, then completely extract the project ZIP to a local folder (including `assets/` and `scripts/`).
+2. Double-click **`Start-Timer.cmd`** in the extracted root. Keep its black terminal window open: it starts the server only on `127.0.0.1:8765` and opens the controller in the default browser. To stop gracefully, type **`q` and press Enter** in that window; confirm that it closes before restarting.
+3. If no browser opens automatically, go to **http://127.0.0.1:8765/control.html**.
+4. Connect the projector, select **Win + P → Erweitern**, then select **Projektionsfenster öffnen**. Move that separate window to the projector and press **F11**.
+5. Keep the controller window on the laptop, and run the 10-second rehearsal before real use.
 
-   ```powershell
-   npm run serve
-   ```
+**For complete operator instructions, errors, fallback and real-projector signoff, read [`RUNBOOK_WINDOWS.md`](./RUNBOOK_WINDOWS.md) (German).** No `npm install` or internet access is required during local operation; Node.js must already be installed. Do not use `file://` to open the HTML directly or mix `localhost` and `127.0.0.1`: the two windows must share the exact origin and browser profile. The connected-window indicator is **not** a physical-projector detector.
 
-4. On the laptop, open **http://127.0.0.1:8765/control.html**.
-5. Click **Projektionsfenster öffnen**. If the browser blocks the pop-up, open **http://127.0.0.1:8765/display.html** manually.
-6. Connect the projector and set **Win + P → Erweitern** (Extend, not Duplicate).
-7. Move the **display** browser window to the projector screen and press **F11** for full-screen mode. Leave that window open.
-8. Keep the **control** window on the laptop. Choose 1/3/5/10 minutes or enter a custom duration, then press **Countdown starten**.
-
-**Important:** Do not open the controller window on the projector. The display only shows the welcome slide or timer; the controller is a separate URL.
-
-No `npm install` is needed to run the website. The server binds to `127.0.0.1` and does not publish the site to the internet.
+The original terminal workflow still works: `npm run serve`, then open both local URLs. The offline-first launcher does not change any runtime timer behavior or make a GitHub Pages deployment.
 
 ## Controls
 
@@ -65,7 +57,7 @@ If Canva assets are revised later, export both images at the **same 16:9 dimensi
 - A snapshot older than **12 hours since its last update** is discarded and replaced with the welcome slide.
 - Duplicate controller windows detect each other and temporarily disable timer actions until only one remains (where BroadcastChannel is available).
 
-**Limitations:** Both windows must share the same site origin and browser storage partition. Browsers in private/incognito windows, different profiles, or different physical devices do **not** automatically synchronize. System clock changes during a *closed* browser can affect reconstructed time. Storage restrictions can disable refresh recovery, and the controller displays a warning. Full offline *reopening* is not supported in v1; an already loaded timer continues without a network connection.
+**Limitations:** Both windows must share the same site origin and browser storage partition. Browsers in private/incognito windows, different profiles, or different physical devices do **not** automatically synchronize. System clock changes during a *closed* browser can affect reconstructed time. Storage restrictions can disable refresh recovery, and the controller displays a warning. For **localhost mode**, the controller and display can be freshly opened or reloaded without internet **while the local server remains running**. A GitHub Pages page without an offline cache cannot be cold-loaded without internet; hosted and localhost origins cannot share synchronization state.
 
 ## Tests
 
@@ -87,7 +79,7 @@ npm run test:browser
 
 The test suite starts its own local test server on `127.0.0.1:18765` and checks browser behavior, including open-window synchronization, pause/resume, reset, refresh recovery, a full 10-second countdown, custom validation, and offline-after-load behavior.
 
-**No browser PASS is claimed for this package yet.** In this environment, the bundled Playwright Chromium executable is unavailable. A separate attempt with the system Chromium launched, but its administrator policy blocked navigation to localhost (`ERR_BLOCKED_BY_ADMINISTRATOR`) before tests could exercise application behavior. Run the suite in an unrestricted environment or through the prepared GitHub CI after separate repository authorization.
+**Current GitHub CI baseline:** 23 Node checks and 14 Chromium browser checks passed on `main` at `d15cb451` (Actions `43689422924`). Earlier local environment restrictions in `TEST_REPORT.md` remain historical evidence, not the current CI result. Physical-projector tests have not been performed.
 
 ### Before Sunday use — manual acceptance
 
@@ -107,12 +99,9 @@ The test suite starts its own local test server on `127.0.0.1:18765` and checks 
 Only the six requested v1 features are implemented: welcome slide, presets, custom countdown, pause/resume/reset, start transition, and refresh recovery. Phone remote, automatic schedules, custom announcements, accounts, and cloud synchronization are not included. Nothing has been deployed.
 
 
-## Prepared for the existing GitHub repository (not uploaded)
+## Repository and release policy
 
-The public repository [`thiepn/ubf-welcome-timer`](https://github.com/thiepn/ubf-welcome-timer) **exists but was confirmed empty** during the 15 November 2026 pre-upload audit: no committed files or branches were returned. This package has **not** been uploaded or committed, and GitHub Pages has **not** been enabled or deployed by this project. The connected GitHub interface could not independently read the current Pages setting. See [`REPOSITORY_PREP.md`](./REPOSITORY_PREP.md) for the controlled import procedure and remaining acceptance gates.
-
-- `.github/workflows/tests.yml` runs tests only; it has read-only permissions and **no deployment steps**.
-- `.nojekyll` and relative links prepare the site for `/ubf-welcome-timer/` if GitHub Pages is separately authorized in the future.
-- `npm test` validates static paths and matching 16:9 image dimensions.
-- **Asset publication permission:** the user explicitly confirmed permission to publish the included Canva-derived assets in the public repository. This is a user attestation, not an independent third-party license audit; it does not grant an open-source license to other users. See [`ASSET_RIGHTS.md`](./ASSET_RIGHTS.md).
-- Real-browser interaction and physical-projector acceptance remain outstanding; do not enable Pages or deploy without separate authorization.
+- Source is committed publicly at [`thiepn/ubf-welcome-timer`](https://github.com/thiepn/ubf-welcome-timer); the repository is **not** empty. The previous `REPOSITORY_PREP.md` and initial test report record **historical pre-upload evidence**, not the current repository state.
+- `.github/workflows/tests.yml` performs tests only; no deployment steps or Pages permissions. GitHub Pages remains disabled; publishing requires separate authorization and independent acceptance.
+- The user attested permission to publish the original Canva-derived PNGs; no independent third-party license audit or downstream reuse license is claimed (see `ASSET_RIGHTS.md`).
+- Full local Windows launcher acceptance requires a Windows runner smoke test; actual Windows 11 dual-screen, projector image fidelity and service rehearsal remain **NOT TESTED** until performed on the real equipment.
