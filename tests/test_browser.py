@@ -260,6 +260,27 @@ class ProjectorTimerBrowserTests(unittest.TestCase):
         self.control.get_by_role('button', name='Countdown starten').click()
         expect(self.display.locator('#stage')).to_have_class(re.compile(r'is-timer'), timeout=3000)
 
+    def test_14_no_web_locks_fallback_warns_and_disables_duplicate_controllers(self):
+        # Fallback detection is advisory, not an atomic lock; test the actual
+        # supported safety behavior after the two tabs have exchanged presence.
+        fallback = self.browser.new_context(viewport={'width':1536,'height':864})
+        try:
+            fallback.add_init_script("""() => {
+              Object.defineProperty(navigator, 'locks', {value: undefined, configurable: true});
+            }""")
+            first = fallback.new_page()
+            first.goto(BASE + '/control.html')
+            self.assertFalse(first.evaluate('() => Boolean(navigator.locks?.request)'))
+            second = fallback.new_page()
+            second.goto(BASE + '/control.html')
+            expect(first.locator('#start')).to_be_disabled(timeout=6000)
+            expect(second.locator('#start')).to_be_disabled(timeout=6000)
+            expect(first.locator('#system-message')).to_contain_text('Mehrere Steuerfenster')
+            second.close()
+            expect(first.locator('#start')).to_be_enabled(timeout=8000)
+        finally:
+            fallback.close()
+
     @staticmethod
     def _seconds(s):
         mm,ss = map(int,s.split(':'))
