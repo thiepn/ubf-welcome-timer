@@ -21,6 +21,35 @@ ROOT = Path(__file__).resolve().parents[1]
 PORT = 18765
 BASE = f'http://127.0.0.1:{PORT}'
 
+// This mock exercises the real controller DOM bridge in Chromium; it is NOT
+// a WebView2 test and deliberately cannot certify physical projector behavior.
+NATIVE_BRIDGE_MOCK = r"""(() => {
+  window.__nativeCalls = [];
+  window.__nativeActive = false;
+  window.__nativeTargets = [
+    {id: 'PROJECTOR-A|1920|0|1920|1080', name: 'Projektor A', width: 1920, height: 1080}
+  ];
+  window.__nativePopupWasCalled = false;
+  window.open = () => { window.__nativePopupWasCalled = true; throw Error('native popup regression'); };
+  window.__TAURI__ = {core: {invoke: async (command, args = {}) => {
+    window.__nativeCalls.push({command, args});
+    if (command === 'list_projector_targets') return window.__nativeTargets;
+    if (command === 'projector_status') return window.__nativeActive;
+    if (command === 'open_projector') {
+      if (!window.__nativeTargets.some(target => target.id === args.monitorKey)) {
+        throw Error('Die Beameranordnung hat sich geändert.');
+      }
+      window.__nativeActive = true;
+      return;
+    }
+    if (command === 'release_projector') {
+      window.__nativeActive = false;
+      return;
+    }
+    throw Error('Unexpected command: ' + command);
+  }}};
+})();"""
+
 
 class ProjectorTimerBrowserTests(unittest.TestCase):
     @classmethod
@@ -280,6 +309,69 @@ class ProjectorTimerBrowserTests(unittest.TestCase):
             expect(first.locator('#start')).to_be_enabled(timeout=8000)
         finally:
             fallback.close()
+
+    def test_15_native_handoff_does_not_reset_running_countdown(self):
+        # Real controller code with a mocked Tauri command bridge. The
+        # browser display exercises actual BroadcastChannel/localStorage.
+        self.control.add_init_script(script=NATIVE_BRIDGE_MOCK)
+        self.control.reload()
+        project = self.control.get_by_role('button', name='Auf Beamer projizieren')
+        expect(project).to_be_enabled(timeout=4000)
+        project.click()
+        expect(self.control.get_by_role('button', name='Beamer freigeben')).to_be_visible()
+        self.assertTrue(self.control.evaluate('window.__nativeActive'))
+        self.assertFalse(self.control.evaluate('window.__nativePopupWasCalled'))
+        self.control.get_by_role('button', name='3 Min.').click()
+        self.control.get_by_role('button', name='Countdown starten').click()
+        expect(self.display.locator('#stage')).to_have_class(re.compile('is-timer'))
+        self.control.get_by_role('button', name='Beamer freigeben').click()
+        expect(self.control.get_by_role('button', name='Beamer freigeben')).to_be_hidden()
+        expect(self.control.locator('#status-badge')).to_have_attribute('data-phase', 'running')
+        self.assertFalse(self.control.evaluate('window.__nativeActive'))
+
+        # Simulate the native display being closed, then reopened after the
+        # PowerPoint handoff: the controller's authoritative timer survives.
+        self.display.close()
+        self.display = self.context.new_page()
+        self.display.on('pageerror', lambda e: self.errors.append(f'reopened display: {e}'))
+        self.display.goto(BASE + '/display.html')
+        expect(self.display.locator('#stage')).to_have_class(re.compile('is-timer'), timeout=4000)
+        project.click()
+        expect(self.control.get_by_role('button', name='Beamer freigeben')).to_be_visible()
+        calls = self.control.evaluate('window.__nativeCalls')
+        self.assertTrue(any(call['command'] == 'open_projector' and
+                            call['args']['monitorKey'] == 'PROJECTOR-A|1920|0|1920|1080'
+                            for call in calls))
+        self.assertLessEqual(abs(self._seconds(self.display.locator('#timer-numbers').inner_text())
+                                 - self._seconds(self.control.locator('#current-time').inner_text())), 1)
+
+    def test_16_native_display_rearrangement_refuses_stale_target(self):
+        # A layout change between target listing and clicking MUST NOT open a
+        # different monitor. The Rust resolver separately tests this invariant.
+        self.control.add_init_script(script=NATIVE_BRIDGE_MOCK)
+        self.control.reload()
+        expect(self.control.get_by_role('button', name='Auf Beamer projizieren')).to_be_enabled()
+        self.control.evaluate("""() => {
+          window.__nativeTargets = [
+            {id:'MONITOR-A|-1920|0|1920|1080', name:'Monitor A', width:1920, height:1080},
+            {id:'PROJECTOR-B|1920|0|1280|720', name:'Projektor B', width:1280, height:720}
+          ];
+          window.dispatchEvent(new Event('focus'));
+        }""")
+        picker = self.control.locator('#native-monitor')
+        expect(picker).to_be_visible(timeout=4000)
+        picker.select_option('PROJECTOR-B|1920|0|1280|720')
+        self.control.evaluate("""() => {
+          window.__nativeTargets = [
+            {id:'PROJECTOR-B|-1280|0|1280|720', name:'Projektor B', width:1280, height:720},
+            {id:'MONITOR-A|1920|0|1920|1080', name:'Monitor A', width:1920, height:1080}
+          ];
+        }""")
+        self.control.get_by_role('button', name='Auf Beamer projizieren').click()
+        expect(self.control.locator('#native-projector-state')).to_contain_text(
+            'Die Beameranordnung hat sich geändert.', timeout=2000)
+        self.assertFalse(self.control.evaluate('window.__nativeActive'))
+        self.assertFalse(self.control.evaluate('window.__nativePopupWasCalled'))
 
     @staticmethod
     def _seconds(s):
