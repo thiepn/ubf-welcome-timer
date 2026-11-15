@@ -65,7 +65,7 @@ jobs:
         with:
           node-version: '22'
       - name: Test the double-click CMD launcher and local assets
-        run: node --test tests/windows-launch.test.js
+        run: node --test tests/windows-launch.test.js tests/browser-open.test.js
 
   windows-old-node:
     name: Windows unsupported Node.js 18 rejection
