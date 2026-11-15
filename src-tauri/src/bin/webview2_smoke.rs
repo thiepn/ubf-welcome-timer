@@ -8,7 +8,35 @@
 mod operator_focus;
 #[path = "../projector_lifecycle.rs"]
 mod projector_lifecycle;
+use std::sync::{atomic::{AtomicUsize, Ordering}, Mutex};
 use tauri::{Manager, PhysicalPosition, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
+
+#[derive(Default)]
+struct LifecycleProbeState {
+    // Mimics the current production behavior: Destroyed clears ownership.
+    current_generation: Mutex<Option<usize>>,
+    destroyed_events: AtomicUsize,
+    late_destroyed_events: AtomicUsize,
+}
+
+fn probe_register(state: &LifecycleProbeState, generation: usize) -> Result<(), String> {
+    *state.current_generation.lock().map_err(|e| e.to_string())? = Some(generation);
+    Ok(())
+}
+fn probe_begin_release(state: &LifecycleProbeState) -> Result<(), String> {
+    *state.current_generation.lock().map_err(|e| e.to_string())? = None;
+    Ok(())
+}
+fn probe_verify_generation(state: &LifecycleProbeState, generation: usize) -> Result<(), String> {
+    let current = *state.current_generation.lock().map_err(|e| e.to_string())?;
+    if current != Some(generation) {
+        return Err(format!(
+            "WEBVIEW2_STALE_DESTROYED_REPRO: active projector generation {generation} was cleared unexpectedly (actual {current:?})"
+        ));
+    }
+    Ok(())
+}
+
 
 const KEY: &str = "ubf-koeln-projector-timer:state:v1";
 
@@ -181,7 +209,12 @@ async fn smoke_focus_check(app: tauri::AppHandle, window: WebviewWindow) -> Resu
                 app.exit(1);
             } else {
                 println!("WEBVIEW2_SAME_LABEL_REOPEN_PASS: immediate production-label reuse succeeded");
-                app.exit(0);
+                if let Err(error) = probe_repeated_same_label_destroyed(app.clone()).await {
+                    eprintln!("WEBVIEW2_DESTROYED_ORDER_FAIL: {error}");
+                    app.exit(1);
+                } else {
+                    app.exit(0);
+                }
             }
             return Ok(());
         }
@@ -248,6 +281,58 @@ async fn probe_immediate_same_label_reopen(app: tauri::AppHandle) -> Result<(), 
             Err(format!("immediate reopen: {error}"))
         }
     }
+}
+
+// Exercise real Tauri Destroyed callbacks on Windows, across repeated
+// release/recreate cycles with the exact production "projector" label.
+// The registry tracks generation only in this disposable test executable.
+async fn probe_repeated_same_label_destroyed(
+    app: tauri::AppHandle,
+) -> Result<(), String> {
+    const CYCLES: usize = 24;
+    let state = app.state::<LifecycleProbeState>();
+    for generation in 1..=CYCLES {
+        let win = WebviewWindowBuilder::new(
+            &app, "projector", WebviewUrl::App("display.html".into()),
+        )
+        .title(format!("CI projector generation {generation}"))
+        .visible(false)
+        .focused(false)
+        .focusable(false)
+        .build()
+        .map_err(|e| format!("generation {generation} build: {e}"))?;
+        win.show().map_err(|e| format!("generation {generation} show: {e}"))?;
+        probe_register(&state, generation)?;
+        // Give an older queued Destroyed callback a chance to run while the
+        // new projector owns the registry, without adding a delay at release.
+        tokio::time::sleep(std::time::Duration::from_millis(30)).await;
+        probe_verify_generation(&state, generation)?;
+        probe_begin_release(&state)?;
+        projector_lifecycle::close_and_wait_for_label_release(&app, &win).await
+            .map_err(|e| format!("generation {generation} release: {e}"))?;
+    }
+    for _ in 0..40 {
+        if state.destroyed_events.load(Ordering::SeqCst) >= CYCLES {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
+    let destroyed = state.destroyed_events.load(Ordering::SeqCst);
+    let late = state.late_destroyed_events.load(Ordering::SeqCst);
+    if destroyed != CYCLES {
+        return Err(format!(
+            "WEBVIEW2_DESTROYED_INCONCLUSIVE: expected {CYCLES} real Destroyed events, observed {destroyed}"
+        ));
+    }
+    if late != 0 {
+        return Err(format!(
+            "WEBVIEW2_STALE_DESTROYED_REPRO: {late} late Destroyed callbacks cleared an active new projector"
+        ));
+    }
+    println!(
+        "WEBVIEW2_DESTROYED_ORDER_PASS: {CYCLES} rapid same-label windows released, {destroyed} native Destroyed callbacks, no new-generation registry loss"
+    );
+    Ok(())
 }
 
 const OBSERVE_FOCUS: &str = r#"
@@ -414,6 +499,29 @@ const OBSERVE_REOPENED: &str = r#"
 fn main() {
     let _ = KEY; // documented single authoritative timer storage key
     tauri::Builder::default()
+        .manage(LifecycleProbeState::default())
+        .on_window_event(|window, event| {
+            if window.label() != "projector"
+                || !matches!(event, tauri::WindowEvent::Destroyed) {
+                return;
+            }
+            let state = window.app_handle().state::<LifecycleProbeState>();
+            let mut current = match state.current_generation.lock() {
+                Ok(current) => current,
+                Err(error) => {
+                    eprintln!("WEBVIEW2_DESTROYED_ORDER_FAIL: poisoned lifecycle registry: {error}");
+                    window.app_handle().exit(1);
+                    return;
+                }
+            };
+            if let Some(generation) = *current {
+                state.late_destroyed_events.fetch_add(1, Ordering::SeqCst);
+                eprintln!("WEBVIEW2_STALE_DESTROYED_REPRO: Destroyed arrived after generation {generation} was registered");
+            }
+            // Mirror production's unconditional Destroyed => registry.set(None)
+            *current = None;
+            state.destroyed_events.fetch_add(1, Ordering::SeqCst);
+        })
         .on_page_load(|webview, payload| {
             if !matches!(payload.event(), tauri::webview::PageLoadEvent::Finished) {
                 return;
