@@ -4,7 +4,7 @@
 //! No projector or PowerPoint acceptance is implied.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use tauri::{Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
+use tauri::{Manager, PhysicalPosition, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 
 const KEY: &str = "ubf-koeln-projector-timer:state:v1";
 
@@ -51,7 +51,27 @@ async fn smoke_report(
                 println!(
                     "WEBVIEW2_SMOKE_PASS: live start/pause/resume, display release and reopening preserved timer"
                 );
-                app.exit(0);
+                // Separate single-monitor native fullscreen test on the CI
+                // runner. This does NOT emulate an extended projector.
+                let controller = app.get_webview_window("controller").ok_or("Controller missing")?;
+                let monitor = controller.primary_monitor().map_err(|e| e.to_string())?
+                    .ok_or("No Windows CI primary monitor")?;
+                let p = monitor.position();
+                let fullscreen = WebviewWindowBuilder::new(
+                    &app, "ci-fullscreen", WebviewUrl::App("display.html".into()),
+                )
+                .title("CI-only fullscreen physical bounds probe")
+                .visible(false)
+                .decorations(false)
+                .resizable(false)
+                .build()
+                .map_err(|e| e.to_string())?;
+                fullscreen.set_position(PhysicalPosition::new(p.x, p.y))
+                    .map_err(|e| e.to_string())?;
+                fullscreen.set_fullscreen_on_monitor(PhysicalPosition::new(
+                    f64::from(p.x), f64::from(p.y),
+                )).map_err(|e| e.to_string())?;
+                fullscreen.show().map_err(|e| e.to_string())?;
             }
             _ => return Err(format!("Unexpected native smoke signal: {} / {phase}", window.label())),
         }
@@ -63,6 +83,49 @@ async fn smoke_report(
     }
     result
 }
+
+#[tauri::command]
+fn smoke_fullscreen_check(app: tauri::AppHandle, window: WebviewWindow) -> Result<bool, String> {
+    if window.label() != "ci-fullscreen" {
+        return Err("CI fullscreen assertion is restricted to its test window".into());
+    }
+    let monitor = window.primary_monitor().map_err(|e| e.to_string())?
+        .ok_or("No Windows CI primary monitor")?;
+    let mpos = monitor.position();
+    let msize = monitor.size();
+    let p = window.inner_position().map_err(|e| e.to_string())?;
+    let s = window.inner_size().map_err(|e| e.to_string())?;
+    let max_error = 2_u32;
+    let pass = window.is_fullscreen().map_err(|e| e.to_string())?
+        && p.x.abs_diff(mpos.x) <= max_error
+        && p.y.abs_diff(mpos.y) <= max_error
+        && s.width.abs_diff(msize.width) <= max_error
+        && s.height.abs_diff(msize.height) <= max_error;
+    if pass {
+        println!("WEBVIEW2_FULLSCREEN_PASS: real Windows fullscreen content rectangle matches the CI monitor's physical pixels");
+        app.exit(0);
+    }
+    Ok(pass)
+}
+
+const OBSERVE_FULLSCREEN: &str = r#"
+(() => {
+  let attempts = 0;
+  const ticker = setInterval(async () => {
+    try {
+      if (await window.__TAURI__.core.invoke('smoke_fullscreen_check')) {
+        clearInterval(ticker);
+      } else if (++attempts >= 50) {
+        clearInterval(ticker);
+        console.error('WEBVIEW2_FULLSCREEN_FAIL: 5s without matching physical bounds');
+      }
+    } catch (error) {
+      clearInterval(ticker);
+      console.error('WEBVIEW2_FULLSCREEN_FAIL: ' + String(error));
+    }
+  }, 100);
+})();
+"#;
 
 const START_COUNTDOWN: &str = r#"
 (() => {
@@ -194,6 +257,7 @@ fn main() {
                 "controller" => webview.eval(START_COUNTDOWN),
                 "ci-display" => webview.eval(OBSERVE_RUNNING),
                 "ci-return-display" => webview.eval(OBSERVE_REOPENED),
+                "ci-fullscreen" => webview.eval(OBSERVE_FULLSCREEN),
                 _ => return,
             };
             if let Err(error) = result {
@@ -214,7 +278,7 @@ fn main() {
             .build()?;
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![smoke_report])
+        .invoke_handler(tauri::generate_handler![smoke_report, smoke_fullscreen_check])
         .run(tauri::generate_context!())
         .expect("Native WebView2 smoke could not initialize");
 }
