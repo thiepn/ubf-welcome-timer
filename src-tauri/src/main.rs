@@ -5,7 +5,7 @@
 
 use serde::Serialize;
 use std::time::Duration;
-use std::sync::Mutex;
+use std::sync::{atomic::{AtomicBool, Ordering}, Mutex};
 use tauri::{
     Manager, Monitor, PhysicalPosition, State, WebviewUrl, WebviewWindow, WebviewWindowBuilder,
 };
@@ -66,14 +66,38 @@ fn choose_target_key(keys: &[String], selected: &str) -> Result<usize, &'static 
 // Native state records which exact screen has ownership of the presentation.
 // Closing or unplugging the screen clears the registration.
 #[derive(Default)]
-struct ProjectorRegistry(Mutex<Option<String>>);
+struct ProjectorRegistry {
+    target: Mutex<Option<String>>,
+    // A new hidden projector WebView already exists before fullscreen
+    // placement finishes. Concurrent status probes must not treat it as an
+    // unowned window and close it during presentation startup.
+    opening: AtomicBool,
+}
+
+// RAII ensures even an early error or cancelled async command releases the
+// in-flight guard instead of permanently blocking projection.
+struct OpeningPermit<'a>(&'a ProjectorRegistry);
+impl Drop for OpeningPermit<'_> {
+    fn drop(&mut self) {
+        self.0.opening.store(false, Ordering::Release);
+    }
+}
 
 impl ProjectorRegistry {
+    fn begin_open(&self) -> Result<OpeningPermit<'_>, String> {
+        self.opening.compare_exchange(
+            false, true, Ordering::AcqRel, Ordering::Acquire,
+        ).map_err(|_| "Projektionsfenster wird bereits vorbereitet.".to_string())?;
+        Ok(OpeningPermit(self))
+    }
+    fn is_opening(&self) -> bool {
+        self.opening.load(Ordering::Acquire)
+    }
     fn expected(&self) -> Result<Option<String>, String> {
-        Ok(self.0.lock().map_err(|_| "Projektorstatus ist gesperrt.")?.clone())
+        Ok(self.target.lock().map_err(|_| "Projektorstatus ist gesperrt.")?.clone())
     }
     fn set(&self, target: Option<String>) -> Result<(), String> {
-        *self.0.lock().map_err(|_| "Projektorstatus ist gesperrt.")? = target;
+        *self.target.lock().map_err(|_| "Projektorstatus ist gesperrt.")? = target;
         Ok(())
     }
 }
@@ -219,6 +243,7 @@ async fn open_projector(
     monitor_key: String,
 ) -> Result<(), String> {
     require_controller(&window)?;
+    let _opening_permit = registry.begin_open()?;
     let (target, key) = verified_target(&window, &monitor_key)?;
     let position = target.position();
     let target_position = PhysicalPosition::new(position.x as f64, position.y as f64);
@@ -279,6 +304,11 @@ async fn release_projector(
     registry: State<'_, ProjectorRegistry>,
 ) -> Result<(), String> {
     require_controller(&window)?;
+    // Do not close an opening projection while its fullscreen placement is
+    // still being confirmed by Windows.
+    if registry.is_opening() {
+        return Err("Beamer wird gerade geöffnet. Bitte erneut versuchen.".into());
+    }
     // Release registration before closing the WebView2 window. The controller
     // and its persisted timer state are intentionally not touched.
     registry.set(None)?;
@@ -295,6 +325,11 @@ fn projector_status(
     registry: State<'_, ProjectorRegistry>,
 ) -> Result<bool, String> {
     require_controller(&window)?;
+    // Without this guard, a status refresh can observe the newly created
+    // window BEFORE registry.set(Some(...)) and close it as "unregistered".
+    if registry.is_opening() {
+        return Ok(false);
+    }
     let Some(projector) = app.get_webview_window("projector") else {
         registry.set(None)?;
         return Ok(false);
@@ -331,12 +366,17 @@ fn main() {
             ) {
                 return;
             }
+            // Position/size events are expected while opening fullscreen.
+            if app.state::<ProjectorRegistry>().is_opening() {
+                return;
+            }
             // Windows can relocate a fullscreen presentation onto the laptop
             // when an HDMI projector disconnects. Validate the actual monitor
             // and physical bounds on the native event, rather than waiting
             // for the controller's three-second polling fallback.
             tauri::async_runtime::spawn(async move {
                 let registry = app.state::<ProjectorRegistry>();
+                if registry.is_opening() { return; }
                 let Ok(Some(expected_key)) = registry.expected() else { return; };
                 let Some(controller) = app.get_webview_window("controller") else { return; };
                 let Some(projector) = app.get_webview_window("projector") else { return; };
@@ -434,6 +474,31 @@ mod tests {
         assert!(!physical_bounds_match((0, 0, 1920, 1040), (0, 0, 1920, 1080)));
         assert!(!physical_bounds_match((0, 0, 1920, 1080), (1920, 0, 1920, 1080)));
         assert!(physical_bounds_match((1921, -1, 1921, 1079), (1920, 0, 1920, 1080)));
+    }
+
+    #[test]
+    fn opening_projector_is_not_reclassified_as_unowned_by_status_poll() {
+        let state = ProjectorRegistry::default();
+        assert!(!state.is_opening());
+        {
+            let _permit = state.begin_open().expect("first native open should acquire guard");
+            assert!(state.is_opening());
+            assert!(state.begin_open().is_err(), "a second overlapping open must fail closed");
+            assert_eq!(state.expected().unwrap(), None,
+                "newly constructed fullscreen window has no registered target until validation");
+            state.set(Some("PROJECTOR-A|1920|0|1920|1080".into())).unwrap();
+            assert!(state.is_opening(), "status must defer until the command finishes");
+        }
+        assert!(!state.is_opening());
+        assert!(state.expected().unwrap().is_some());
+    }
+
+    #[test]
+    fn failed_open_releases_the_guard_and_allows_retry() {
+        let state = ProjectorRegistry::default();
+        { let _permit = state.begin_open().unwrap(); }
+        assert!(!state.is_opening());
+        { let _retry = state.begin_open().expect("a failed open must be retryable"); }
     }
 
     #[test]
