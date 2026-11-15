@@ -4,6 +4,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use serde::Serialize;
+use std::time::Duration;
 use std::sync::Mutex;
 use tauri::{
     Manager, Monitor, PhysicalPosition, State, WebviewUrl, WebviewWindow, WebviewWindowBuilder,
@@ -159,10 +160,47 @@ fn validate_projector(
         return Ok(false);
     };
     let current_key = monitor_key(&actual);
-    let still_connected = external_monitors(window)?
-        .iter()
-        .any(|monitor| monitor_key(monitor) == expected_key);
-    Ok(still_connected && current_key == expected_key)
+    // A fullscreen flag and a monitor identity do not prove that WebView
+    // content actually covers the physical projector pixel area.
+    let monitors = external_monitors(window)?;
+    let Some(target) = monitors.iter().find(|m| monitor_key(m) == expected_key) else {
+        return Ok(false);
+    };
+    if current_key != expected_key {
+        return Ok(false);
+    }
+    let inner_position = projector.inner_position().map_err(|e| e.to_string())?;
+    let inner_size = projector.inner_size().map_err(|e| e.to_string())?;
+    let pos = target.position();
+    let size = target.size();
+    Ok(physical_bounds_match(
+        (inner_position.x, inner_position.y, inner_size.width, inner_size.height),
+        (pos.x, pos.y, size.width, size.height),
+    ))
+}
+
+fn physical_bounds_match(actual: (i32, i32, u32, u32), target: (i32, i32, u32, u32)) -> bool {
+    const MAX_DIFFERENCE_PX: u32 = 2;
+    actual.0.abs_diff(target.0) <= MAX_DIFFERENCE_PX
+        && actual.1.abs_diff(target.1) <= MAX_DIFFERENCE_PX
+        && actual.2.abs_diff(target.2) <= MAX_DIFFERENCE_PX
+        && actual.3.abs_diff(target.3) <= MAX_DIFFERENCE_PX
+}
+
+async fn wait_for_fullscreen_placement(
+    controller: &WebviewWindow,
+    projector: &WebviewWindow,
+    expected_key: &str,
+) -> Result<bool, String> {
+    // Win32 fullscreen placement can be asynchronous; allow up to 1.2s
+    // for the actual physical window bounds to settle.
+    for _ in 0..16 {
+        if validate_projector(controller, projector, expected_key)? {
+            return Ok(true);
+        }
+        tokio::time::sleep(Duration::from_millis(75)).await;
+    }
+    Ok(false)
 }
 
 fn close_failed_projection(
@@ -191,7 +229,7 @@ async fn open_projector(
             .set_fullscreen_on_monitor(target_position)
             .map_err(|e| format!("Beamer-Vollbild fehlgeschlagen: {e}"))?;
         existing.show().map_err(|e| e.to_string())?;
-        if !validate_projector(&window, &existing, &key)? {
+        if !wait_for_fullscreen_placement(&window, &existing, &key).await? {
             close_failed_projection(&existing, &registry)?;
             return Err("Beamer wurde nicht auf dem gewählten Bildschirm im Vollbild angezeigt.".into());
         }
@@ -211,6 +249,11 @@ async fn open_projector(
     .build()
     .map_err(|e| format!("Projektionsfenster konnte nicht erstellt werden: {e}"))?;
 
+    // Position the invisible window on the selected screen before showing it.
+    if let Err(e) = projector.set_position(tauri::PhysicalPosition::new(position.x, position.y)) {
+        let _ = projector.close();
+        return Err(format!("Beamerposition konnte nicht gesetzt werden: {e}"));
+    }
     if let Err(e) = projector.set_fullscreen_on_monitor(target_position) {
         let _ = projector.close();
         return Err(format!("Beamer-Vollbild fehlgeschlagen: {e}"));
@@ -221,7 +264,7 @@ async fn open_projector(
     }
     // Re-check after the window is shown. If hot-plug changed the topology,
     // reject rather than silently taking over a different monitor.
-    if !validate_projector(&window, &projector, &key)? {
+    if !wait_for_fullscreen_placement(&window, &projector, &key).await? {
         close_failed_projection(&projector, &registry)?;
         return Err("Beamer wurde nicht auf dem gewählten Bildschirm im Vollbild angezeigt.".into());
     }
@@ -344,6 +387,20 @@ mod tests {
         let extended_left = DisplayIdentity { x: -1280, y: 0, width: 1280, height: 720 };
         assert!(!is_external(&mirror, &main));
         assert!(is_external(&extended_left, &main));
+    }
+
+    #[test]
+    fn physical_fullscreen_bounds_accept_negative_coordinates_and_hidpi_pixels() {
+        assert!(physical_bounds_match((-1920, 0, 1920, 1080), (-1920, 0, 1920, 1080)));
+        assert!(physical_bounds_match((2560, -150, 3840, 2160), (2560, -150, 3840, 2160)));
+        assert!(!physical_bounds_match((2560, -150, 2560, 1440), (2560, -150, 3840, 2160)));
+    }
+
+    #[test]
+    fn maximized_taskbar_window_and_wrong_screen_are_rejected() {
+        assert!(!physical_bounds_match((0, 0, 1920, 1040), (0, 0, 1920, 1080)));
+        assert!(!physical_bounds_match((0, 0, 1920, 1080), (1920, 0, 1920, 1080)));
+        assert!(physical_bounds_match((1921, -1, 1921, 1079), (1920, 0, 1920, 1080)));
     }
 
     #[test]
