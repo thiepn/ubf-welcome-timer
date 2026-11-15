@@ -63,6 +63,9 @@ test('native actions are restricted to the controller and display is read-only',
   assert.match(main, /\.focusable\(false\)/);
   assert.match(main, /operator_had_focus/);
   assert.match(main, /operator_focus::restore_if_projector_activated/);
+  assert.match(main, /projector_lifecycle::close_and_wait_for_label_release/);
+  assert.match(file('src-tauri/src/projector_lifecycle.rs'), /get_webview_window\(&label\)\.is_none\(\)/);
+  assert.match(file('src-tauri/src/bin/webview2_smoke.rs'), /WEBVIEW2_SAME_LABEL_REOPEN_PASS/);
   assert.match(file('src-tauri/src/operator_focus.rs'), /projector_focused_now/);
   assert.match(file('src-tauri/src/bin/webview2_smoke.rs'), /WEBVIEW2_FOCUS_RACE_PASS/);
   const nativeSmoke = file('src-tauri/src/bin/webview2_smoke.rs');

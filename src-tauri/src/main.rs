@@ -4,6 +4,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod operator_focus;
+mod projector_lifecycle;
 use serde::Serialize;
 use std::time::Duration;
 use std::sync::{atomic::{AtomicBool, Ordering}, Mutex};
@@ -338,7 +339,9 @@ async fn release_projector(
     // and its persisted timer state are intentionally not touched.
     registry.set(None)?;
     if let Some(projector) = app.get_webview_window("projector") {
-        projector.close().map_err(|e| e.to_string())?;
+        // Tauri::close posts the close; its result does not prove the label
+        // can be reused yet. Keep the controller action pending until it can.
+        projector_lifecycle::close_and_wait_for_label_release(&app, &projector).await?;
     }
     Ok(())
 }

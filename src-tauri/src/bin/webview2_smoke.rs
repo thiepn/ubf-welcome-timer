@@ -6,6 +6,8 @@
 
 #[path = "../operator_focus.rs"]
 mod operator_focus;
+#[path = "../projector_lifecycle.rs"]
+mod projector_lifecycle;
 use tauri::{Manager, PhysicalPosition, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 
 const KEY: &str = "ubf-koeln-projector-timer:state:v1";
@@ -216,9 +218,11 @@ async fn probe_immediate_same_label_reopen(app: tauri::AppHandle) -> Result<(), 
     if app.get_webview_window("projector").is_none() {
         return Err("first projector missing before release".into());
     }
-    first.close().map_err(|e| format!("first projector release: {e}"))?;
-    // Critically no sleep/retry between close and reopen: matches a rapid
-    // operator transition. A rejected duplicate label is consequential.
+    projector_lifecycle::close_and_wait_for_label_release(&app, &first).await
+        .map_err(|e| format!("first projector release: {e}"))?;
+    // This represents the first instant *after successful release*.
+    // A rejected duplicate label would mean the operator saw "released"
+    // before it was safe to open a new projection.
     match WebviewWindowBuilder::new(
         &app, "projector", WebviewUrl::App("display.html".into()),
     )
@@ -228,7 +232,15 @@ async fn probe_immediate_same_label_reopen(app: tauri::AppHandle) -> Result<(), 
     .focusable(false)
     .build() {
         Ok(second) => {
-            second.close().map_err(|e| format!("second projector close: {e}"))?;
+            second.show().map_err(|e| format!("second projector show: {e}"))?;
+            if app.get_webview_window("projector").is_none() {
+                return Err("reopened projector label was not registered".into());
+            }
+            projector_lifecycle::close_and_wait_for_label_release(&app, &second).await
+                .map_err(|e| format!("second projector release: {e}"))?;
+            if app.get_webview_window("projector").is_some() {
+                return Err("label remained registered after second release".into());
+            }
             Ok(())
         }
         Err(error) => {

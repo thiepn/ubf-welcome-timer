@@ -146,3 +146,25 @@ permissions and transitions. A test-only second WebView2 process window
 inside the same app is **not proof** of a seamless external PowerPoint/Canva
 handoff. Real Windows 11 dual-screen behavior and Sunday service remain
 **NOT_TESTED / NO_GO**.
+
+## Rapid release/reopen with the production window label
+
+Real Windows Server 2022 WebView2 CI **reproduced** the race in Actions
+#43763040871. A test-only projection labeled exactly `projector` was
+closed, and immediately rebuilding `projector` failed with
+`a webview with label 'projector' already exists`. This shows that
+`WebviewWindow::close()` can return before Tauri removes the old label.
+
+The native `release_projector` command now shares the same
+`projector_lifecycle::close_and_wait_for_label_release` routine used by
+the Windows CI probe. It waits for actual label removal (maximum roughly
+two seconds), returning success only when an immediate same-label
+reopening is possible. If the old window remains, the operator receives
+an explicit error, not a false successful handoff. No timer persistence,
+Canva assets, browser fallback, or other presentation programs are changed.
+
+The CI fixture **does not** use a physical projector. It tests same-label
+native lifecycle and verifies the new WebView can be shown and subsequently
+released. Windows 11 hardware, HDMI disconnect, PowerPoint/Canva audience
+handoff, and a desktop-free switch remain **NOT_TESTED**. Live service
+remains **NO_GO** pending the physical acceptance matrix.
