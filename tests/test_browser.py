@@ -493,6 +493,49 @@ class ProjectorTimerBrowserTests(unittest.TestCase):
         self.assertTrue(self.control.evaluate(
             'document.documentElement.scrollWidth <= window.innerWidth + 1'))
 
+    @unittest.skipUnless(os.environ.get('UBF_CAPTURE_UI') == '1', 'CI visual evidence only')
+    def test_21_capture_operator_console_visual_qa(self):
+        """Save actual Chromium screenshots with original Canva assets in CI.
+
+        Screenshots are CI-only transient review evidence, never a deployment
+        or a changed user-facing image. Separate browser/native bridge mock.
+        """
+        out = ROOT / 'artifacts' / 'ui-qa'
+        out.mkdir(parents=True, exist_ok=True)
+        for label, width, height in [
+            ('desktop-1366x768', 1366, 768),
+            ('laptop-1120x800', 1120, 800),
+            ('compact-390x844', 390, 844),
+        ]:
+            self.control.set_viewport_size({'width':width, 'height':height})
+            self.control.screenshot(path=str(out / (label + '.png')),
+                                    full_page=True, animations='disabled')
+            metrics = self.control.evaluate("""() => {
+              const p = document.querySelector('.main-panel').getBoundingClientRect();
+              const s = document.querySelector('.side-panel').getBoundingClientRect();
+              const a = document.querySelector('#start').getBoundingClientRect();
+              return {width: innerWidth, height: innerHeight,
+                      scrollWidth: document.documentElement.scrollWidth,
+                      scrollHeight: document.documentElement.scrollHeight,
+                      mainBottom: Math.round(p.bottom),
+                      sideTop: Math.round(s.top),
+                      startY: Math.round(a.top)};
+            }""")
+            print('UBF_VISUAL_QA', label, metrics, flush=True)
+
+        self.control.add_init_script(script=NATIVE_BRIDGE_MOCK)
+        self.control.reload()
+        expect(self.control.locator('.native-projection')).to_be_visible()
+        for label, width, height in [
+            ('native-desktop-1366x768', 1366, 768),
+            ('native-compact-390x844', 390, 844),
+        ]:
+            self.control.set_viewport_size({'width':width, 'height':height})
+            expect(self.control.get_by_role('button', name='Auf Beamer projizieren')).to_be_enabled()
+            self.control.screenshot(path=str(out / (label + '.png')),
+                                    full_page=True, animations='disabled')
+        print('UBF_VISUAL_QA captured 5 screenshots; real church hardware NOT_TESTED', flush=True)
+
     @staticmethod
     def _seconds(s):
         mm,ss = map(int,s.split(':'))
