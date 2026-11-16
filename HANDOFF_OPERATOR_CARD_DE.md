@@ -90,13 +90,18 @@ und
    neu vergebenen PASS später ein Teilnachweis, wird er NOT_TESTED.
    Importierte ältere PASS-Werte bleiben als historische Einträge erhalten,
    fehlende Teilstatus sind NOT_TESTED und der historische Gesamt-PASS
-   wird sichtbar als unvollständig markiert.
+   wird sichtbar als unvollständig markiert. Importierte Vor-Ort-Protokolle
+   zeigen ebenfalls die Warnung **Frühere Probe**; vor einer neuen Probe
+   **Neue Probe beginnen** verwenden.
 4. Bei einer späteren Probe desselben Builds können die alten lokalen
    Ergebnisse wieder angezeigt werden. Das Formular markiert die
    **wiederhergestellte frühere Probe** sichtbar. Für den neuen Testtermin
    **Neue Probe beginnen** wählen und den Reset bestätigen; alte Ergebnisse
    vorher als JSON sichern. **Alte PASS-Angaben niemals wiederverwenden.**
 5. Zum Ende die Ergebnisdatei über **Ergebnisse als JSON sichern**
-   exportieren. Eine Datei auf einem autorisierten lokalen Datenträger
-   aufbewahren. Das Formular übermittelt keine Daten und setzt
-   niemals die Live-Freigabe.
+   exportieren. `saved_at` bleibt das Datum der letzten Eingabe, während
+   `exported_at` nur den Exportzeitpunkt markiert. Import, Reload und
+   Export ohne Bearbeitung sind keine neuen Beobachtungen. Fehlt bei alten
+   Protokollen ein Eingabezeitpunkt, bleibt er ausdrücklich unbekannt.
+   Die Datei auf einem autorisierten lokalen Datenträger aufbewahren.
+   Das Formular übermittelt keine Daten und setzt niemals die Live-Freigabe.

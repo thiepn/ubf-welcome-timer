@@ -64,7 +64,13 @@ Das Offline-Formular kann Ergebnisse einer **früheren Probe desselben Builds**
 lokal wiederherstellen und kennzeichnet diese jetzt ausdrücklich. Vor einem
 neuen Testtermin **Neue Probe beginnen** wählen und den Reset bestätigen;
 vorhandene Beobachtungen vorher als JSON exportieren. Niemals alte PASS-Werte
-als neue Vor-Ort-Ergebnisse übernehmen.
+als neue Vor-Ort-Ergebnisse übernehmen. Ein importiertes JSON-Protokoll wird
+ebenso sichtbar als **frühere Probe** markiert (mit **Neue Probe beginnen**).
+Beim reinen Import, erneuten Öffnen oder Export bleibt das alte `saved_at`
+(Datum der letzten dokumentierten Eingabe) erhalten; `exported_at` hält
+separat den Dateiexport fest. Alte schema-1-Dateien ohne `saved_at` behalten
+einen unbekannten Zeitpunkt (`null`), statt fälschlich als heute geprüft
+zu gelten. Erst die tatsächliche Bearbeitung schreibt ein neues `saved_at`.
 Je Test W01–W08 den Zustand **PASS / FAIL / NOT_TESTED** und eine knappe
 Beobachtung eintragen. Bei FAIL einen reproduzierbaren Ablauf notieren und
 den Live-Einsatz stoppen. Ein fehlender Build / fehlender Beamer ist

@@ -1013,6 +1013,71 @@ class ProjectorTimerBrowserTests(unittest.TestCase):
             expect(overall).to_have_value('PASS')
         page.close()
 
+    def test_31_import_and_export_preserve_observation_provenance(self):
+        # Importing/exporting historical projector reports must not rewrite
+        # the last-operator-edit time as if the observation was made today.
+        import json
+        from datetime import datetime
+        page = self.context.new_page()
+        page.goto((ROOT / 'rehearsal' / 'ACCEPTANCE_OFFLINE.html').as_uri())
+        source = page.locator('#build-sha').text_content()
+        past = '2026-11-03T12:34:56.000Z'
+        record = {'schema':1,'source_commit':source,
+                  'meta':{'tester':'Historischer Beobachter'},
+                  'steps':{'W05':{'status':'FAIL',
+                                  'observation':'Desktop kurz auf dem Beamer sichtbar'}},
+                  'saved_at':past,'live_service':'NO_GO'}
+        page.locator('#import').set_input_files({
+            'name':'past.json','mimeType':'application/json',
+            'buffer':json.dumps(record).encode('utf-8')
+        })
+        expect(page.locator('#restored-session')).to_be_visible()
+        expect(page.locator('#restored-detail')).to_contain_text('Importierte Beobachtungen')
+        expect(page.locator('#summary')).to_contain_text('1 FAIL')
+        expect(page.locator('select[aria-label="W05 Status"]')).to_have_value('FAIL')
+        with page.expect_download() as d:
+            page.locator('#export').click()
+        exported = json.loads(d.value.path().read_text(encoding='utf-8'))
+        self.assertEqual(exported['saved_at'],past)
+        self.assertEqual(exported['steps']['W05']['observation'],
+                         record['steps']['W05']['observation'])
+        self.assertIn('exported_at',exported)
+        self.assertGreater(datetime.fromisoformat(exported['exported_at'].replace('Z','+00:00')),
+                           datetime.fromisoformat(past.replace('Z','+00:00')))
+        page.reload()
+        expect(page.locator('#restored-session')).to_be_visible()
+        self.assertEqual(page.evaluate("""() => {
+            const key='ubf-physical-rehearsal-v1-'+document.getElementById('build-sha').textContent;
+            return JSON.parse(localStorage.getItem(key)).saved_at;
+        }"""),past)
+        # A real manual edit is the only action that advances saved_at.
+        page.locator('#tester').fill('Neue Beobachtung ergänzt')
+        with page.expect_download() as d:
+            page.locator('#export').click()
+        modified = json.loads(d.value.path().read_text(encoding='utf-8'))
+        self.assertNotEqual(modified['saved_at'],past)
+        self.assertEqual(modified['meta']['tester'],'Neue Beobachtung ergänzt')
+
+        # Old schema-1 exports without saved_at are still importable, but
+        # their unknown observation date must stay unknown.
+        record.pop('saved_at')
+        page.locator('#import').set_input_files({
+            'name':'old-schema1.json','mimeType':'application/json',
+            'buffer':json.dumps(record).encode('utf-8')
+        })
+        expect(page.locator('#restored-detail')).to_contain_text('Zeitpunkt unbekannt')
+        with page.expect_download() as d:
+            page.locator('#export').click()
+        unknown = json.loads(d.value.path().read_text(encoding='utf-8'))
+        self.assertIsNone(unknown['saved_at'])
+        self.assertIn('exported_at',unknown)
+        self.assertEqual(unknown['live_service'],'NO_GO')
+        page.once('dialog',lambda dialog:dialog.accept())
+        page.locator('#new-session').click()
+        expect(page.locator('#summary')).to_contain_text('0 von 8 geprüft')
+        expect(page.locator('#restored-session')).to_be_hidden()
+        page.close()
+
     @staticmethod
     def _seconds(s):
         mm,ss = map(int,s.split(':'))

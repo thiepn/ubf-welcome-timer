@@ -112,6 +112,7 @@ const keys=['date','tester','laptop','projector','displays','presentations'];
 const statuses=['NOT_TESTED','PASS','FAIL'];
 const stepNodes={};
 const root=document.getElementById('steps');
+let lastSavedAt=null; // Last operator edit, never the time an old file was imported/exported.
 function el(tag,cls,text){
  const n=document.createElement(tag);if(cls)n.className=cls;if(text!==undefined)n.textContent=text;return n;
 }
@@ -184,7 +185,7 @@ function snapshot(){
   steps[id]={status:node.select.value,observation:node.observation.value,extra,extra_status};
  }
  const meta={};for(const k of keys)meta[k]=field(k).value;
- return {schema:1,source_commit:source,meta,steps,evidence_gaps:evidenceGaps(),physical_acceptance:'operator-observations-only',live_service:'NO_GO',saved_at:new Date().toISOString()};
+ return {schema:1,source_commit:source,meta,steps,evidence_gaps:evidenceGaps(),physical_acceptance:'operator-observations-only',live_service:'NO_GO',saved_at:lastSavedAt};
 }
 function update(){
  let done=0,fail=0,notTested=0;const gaps=evidenceGaps();
@@ -211,7 +212,19 @@ function update(){
  field('summary').textContent=done+' von 8 geprüft · '+fail+' FAIL · '+notTested+' NOT_TESTED'+
    (gaps.length?' · '+gaps.join(', ')+' PASS ohne vollständige Belege / Teiltest-Ergebnisse':'')+' · Live: NO_GO';
 }
-function changed(){update();try{localStorage.setItem('ubf-physical-rehearsal-v1-'+source,JSON.stringify(snapshot()));}catch{}}
+function store(){try{localStorage.setItem('ubf-physical-rehearsal-v1-'+source,JSON.stringify(snapshot()));}catch{}}
+function changed(){lastSavedAt=new Date().toISOString();update();store();}
+function readSavedAt(data){
+ // Historic schema-1 records without a trustworthy timestamp retain unknown
+ // provenance rather than acquiring an invented "just observed" time.
+ return typeof data?.saved_at==='string'&&Number.isFinite(Date.parse(data.saved_at))?data.saved_at:null;
+}
+function describePrior(data,origin){
+ const timestamp=readSavedAt(data);
+ const when=timestamp?new Date(timestamp).toLocaleString('de-DE'):'Zeitpunkt unbekannt';
+ field('restored-detail').textContent=origin+': '+when+'. Frühere Beobachtungen sind keine neue Windows-11-/Beamer-Abnahme. Für einen neuen Test zuerst Neue Probe beginnen.';
+ field('restored-session').hidden=false;
+}
 for(const k of keys)field(k).addEventListener('input',changed);
 function apply(data,persist=true){
  if(!data||data.schema!==1||data.source_commit!==source||!data.steps||typeof data.steps!=='object')throw Error('Ungültige Datei oder abweichende Quell-SHA. Keine Ergebnisse übernommen.');
@@ -227,7 +240,9 @@ function apply(data,persist=true){
   // visibly unqualified. New PASS selections must satisfy the stricter gate.
   node.legacyPass=s.status==='PASS'&&!hasHandoffEvidence(id,node);
  }
- if(persist)changed();else update();
+ lastSavedAt=readSavedAt(data);
+ update();
+ if(persist)store(); // Import is not a new observation/edit.
 }
 function hasRecordedData(data){
  if(keys.some(k=>typeof data.meta?.[k]==='string'&&data.meta[k].trim()))return true;
@@ -256,24 +271,25 @@ try{
  if(saved){
   const data=JSON.parse(saved);
   apply(data,false);
-  if(hasRecordedData(data)){
-   const timestamp=Date.parse(data.saved_at);
-   const when=Number.isFinite(timestamp)?new Date(timestamp).toLocaleString('de-DE'):'Zeitpunkt unbekannt';
-   field('restored-detail').textContent='Zuletzt gespeicherte Eingaben: '+when+'. Diese Daten wurden wiederhergestellt. Diese Werte gehören zu einer früheren Probe und dürfen nicht als neue Windows-11-/Beamer-Abnahme gelten.';
-   field('restored-session').hidden=false;
-  }
+  if(hasRecordedData(data))describePrior(data,'Zuletzt dokumentierte Änderung (lokal wiederhergestellt)');
  }
 }catch{}
 update();
 field('export').addEventListener('click',()=>{
- const blob=new Blob([JSON.stringify(snapshot(),null,2)],{type:'application/json'});
+ const blob=new Blob([JSON.stringify({...snapshot(),exported_at:new Date().toISOString()},null,2)],{type:'application/json'});
  const url=URL.createObjectURL(blob);const link=document.createElement('a');
  link.href=url;link.download='UBF-Beamer-Probe-'+source.slice(0,12)+'.json';document.body.append(link);link.click();link.remove();
  setTimeout(()=>URL.revokeObjectURL(url),1000);
  field('msg').textContent='JSON gesichert. Datei außerhalb des Browser-Zwischenspeichers sicher ablegen.';
 });
 field('import').addEventListener('change',async(e)=>{
- try{const f=e.target.files?.[0];if(!f)return;apply(JSON.parse(await f.text()));field('msg').textContent='Ergebnisse für die gleiche Quell-SHA geladen.';}
+ try{
+  const f=e.target.files?.[0];if(!f)return;
+  const data=JSON.parse(await f.text());apply(data);
+  if(hasRecordedData(data))describePrior(data,'Importierte Beobachtungen, letzte dokumentierte Änderung');
+  else field('restored-session').hidden=true;
+  field('msg').textContent='Ergebnisse für die gleiche Quell-SHA geladen; keine neue Vor-Ort-Abnahme.';
+ }
  catch(err){field('msg').textContent='Import nicht übernommen: '+err.message;}
  e.target.value='';
 });
