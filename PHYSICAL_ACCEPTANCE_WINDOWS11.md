@@ -101,8 +101,15 @@ Die Teilstatus stehen additiv in `steps.W05.extra_status` bzw.
 Ältere importierte JSON-Dateien behalten ursprüngliche Gesamtstatus und
 Notizen. Fehlende Teilstatus werden als NOT_TESTED dargestellt und ein
 historischer PASS im Feld `evidence_gaps` sichtbar als unqualifiziert
-gekennzeichnet. Der Operator muss Beobachtungstexte und tatsächliches
-Beamerbild eigenständig beurteilen; die Maske zertifiziert nichts automatisch.
+gekennzeichnet. Ist in einem importierten Datensatz bereits ein Teilstatus
+FAIL vorhanden, bleibt der historische Gesamtstatus in der Datei erhalten,
+die Anzeige und Zusammenfassung zählen den Test jedoch als FAIL. Sobald
+die Testperson einen Teilstatus oder eine Teilbeobachtung ändert, gilt die
+FAIL-Priorität auch für die Gesamt-Auswahl: PASS und NOT_TESTED können
+einen dokumentierten Teiltest-FAIL nicht verdecken. Erst nach Korrektur
+beider Teiltests ist eine **bewusste neue** PASS-Entscheidung möglich.
+Der Operator muss Beobachtungstexte und tatsächliches Beamerbild
+eigenständig beurteilen; die Maske zertifiziert nichts automatisch.
 
 Aus dem Zuschauerraum beobachten und
 dokumentieren, ob Desktop, Taskleiste, private Referentenansicht,

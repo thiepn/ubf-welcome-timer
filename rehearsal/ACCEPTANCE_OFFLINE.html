@@ -137,23 +137,27 @@ for(const [id,title,desc] of names){
  root.append(card);stepNodes[id]={card,select,observation,fields,outcomes,hint,legacyPass:false};
  select.addEventListener('change',()=>{
   const node=stepNodes[id];node.legacyPass=false;
-  if(select.value==='PASS'&&!hasHandoffEvidence(id,node)){
-   const failed=Object.values(node.outcomes).some(n=>n.value==='FAIL');
-   select.value=failed?'FAIL':'NOT_TESTED';changed();
-   if(hint)hint.textContent=failed?
-    'PASS nicht übernommen: Mindestens eine Übergabe-Variante ist FAIL.':
-    'PASS nicht übernommen: Beide Varianten benötigen Ergebnis PASS und Beobachtung.';
+  if(hasFailedScenario(node)){
+   // A documented failed variant cannot be hidden by selecting NOT_TESTED
+   // or PASS at the overall level. Correct the variant itself first.
+   select.value='FAIL';changed();
+   if(hint)hint.textContent='Mindestens eine Übergabe-Variante ist FAIL. Der Gesamtstatus bleibt FAIL.';
+  }else if(select.value==='PASS'&&!hasHandoffEvidence(id,node)){
+   select.value='NOT_TESTED';changed();
+   if(hint)hint.textContent='PASS nicht übernommen: Beide Varianten benötigen Ergebnis PASS und Beobachtung.';
   }else changed();
  });
  observation.addEventListener('input',changed);
  function scenarioChanged(){
   const node=stepNodes[id];
-  if(Object.values(node.outcomes).some(n=>n.value==='FAIL')&&!node.legacyPass){
+  // Import is read-only, but a new edit is a current operator decision.
+  // From that point, fail-closed precedence applies to historical records too.
+  node.legacyPass=false;
+  if(hasFailedScenario(node)){
    select.value='FAIL';
-  }else if(select.value==='PASS'&&!node.legacyPass&&!hasHandoffEvidence(id,node)){
+  }else if(select.value==='PASS'&&!hasHandoffEvidence(id,node)){
    select.value='NOT_TESTED';
   }
-  if(hasHandoffEvidence(id,node))node.legacyPass=false;
   changed();
  }
  for(const x of Object.values(fields))x.addEventListener('input',scenarioChanged);
@@ -165,6 +169,9 @@ function hasHandoffEvidence(id,node){
   Object.values(node.fields).every(n=>n.value.trim().length>0)&&
   Object.values(node.outcomes).every(n=>n.value==='PASS')
  );
+}
+function hasFailedScenario(node){
+ return Object.values(node.outcomes).some(n=>n.value==='FAIL');
 }
 function evidenceGaps(){
  return Object.entries(stepNodes).filter(([id,node])=>
@@ -183,14 +190,22 @@ function update(){
  let done=0,fail=0,notTested=0;const gaps=evidenceGaps();
  for(const [id,node] of Object.entries(stepNodes)){
   const status=node.select.value,unqualified=gaps.includes(id);
-  node.card.dataset.status=unqualified?'unqualified':status;
-  if(status!=='NOT_TESTED'&&!unqualified)done++;
-  if(status==='NOT_TESTED')notTested++;
-  if(status==='FAIL')fail++;
+  const variantFailed=hasFailedScenario(node);
+  // A legacy overall PASS is kept for provenance, but a known per-variant
+  // failure must count as FAIL rather than silently disappearing from totals.
+  const effective=variantFailed?'FAIL':unqualified?'NOT_TESTED':status;
+  node.card.dataset.status=variantFailed?'FAIL':unqualified?'unqualified':status;
+  if(effective!=='NOT_TESTED')done++;
+  if(effective==='NOT_TESTED')notTested++;
+  if(effective==='FAIL')fail++;
   if(node.hint){
-   node.hint.textContent=unqualified?
-    'Historischer PASS ohne zwei bestätigte Teiltests (Ergebnis PASS + Beobachtung) ist keine qualifizierte Abnahme.':
-    'PASS nur, wenn beide Varianten jeweils Ergebnis PASS und eine Beobachtung haben.';
+   node.hint.textContent=variantFailed?
+    (status==='PASS'?
+     'Teiltest FAIL: Historischer Gesamtstatus PASS bleibt im Datensatz erhalten, zählt hier aber als FAIL.':
+     'Mindestens eine Übergabe-Variante ist FAIL. Gesamtbewertung: FAIL.'):
+    unqualified?
+     'Historischer PASS ohne zwei bestätigte Teiltests (Ergebnis PASS + Beobachtung) ist keine qualifizierte Abnahme.':
+     'PASS nur, wenn beide Varianten jeweils Ergebnis PASS und eine Beobachtung haben.';
   }
  }
  field('summary').textContent=done+' von 8 geprüft · '+fail+' FAIL · '+notTested+' NOT_TESTED'+

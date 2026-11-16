@@ -964,6 +964,55 @@ class ProjectorTimerBrowserTests(unittest.TestCase):
                          {'full':'NOT_TESTED','presenter':'NOT_TESTED'})
         page.close()
 
+    def test_30_historical_pass_with_failed_variant_cannot_hide_fail(self):
+        # Reproduction on previous HEAD: importing a historical top-level
+        # PASS with a failed scenario left the summary at 0 FAIL, and editing
+        # the scenario while legacyPass was set did not update overall status.
+        import json
+        page = self.context.new_page()
+        page.goto((ROOT / 'rehearsal' / 'ACCEPTANCE_OFFLINE.html').as_uri())
+        source = page.locator('#build-sha').text_content()
+        for code, index, fields in [('W05',4,('prepared','after')),
+                                    ('W06',5,('full','presenter'))]:
+            old = {'schema':1,'source_commit':source,
+                   'meta':{'tester':'Historische Probe'},
+                   'steps':{code:{'status':'PASS',
+                                 'observation':'Früherer Gesamtstatus',
+                                 'extra':{fields[0]:'Fehler am Beamer beobachtet',
+                                          fields[1]:'Noch nicht beurteilt'},
+                                 'extra_status':{fields[0]:'FAIL',fields[1]:'NOT_TESTED'}}},
+                   'live_service':'NO_GO'}
+            page.locator('#import').set_input_files({
+                'name':'historical.json','mimeType':'application/json',
+                'buffer':json.dumps(old).encode('utf-8')
+            })
+            overall = page.locator(f'select[aria-label="{code} Status"]')
+            row = page.locator('.probe').nth(index)
+            expect(overall).to_have_value('PASS')  # Historical raw value unchanged
+            expect(row).to_have_attribute('data-status','FAIL')
+            expect(page.locator('#summary')).to_contain_text('1 FAIL')
+            expect(page.locator('#summary')).to_contain_text('Live: NO_GO')
+            expect(row.locator('.evidence-hint')).to_contain_text('Historischer Gesamtstatus PASS')
+            with page.expect_download() as d:
+                page.locator('#export').click()
+            exported = json.loads(d.value.path().read_text(encoding='utf-8'))
+            self.assertEqual(exported['steps'][code]['status'],'PASS')
+            self.assertEqual(exported['steps'][code]['extra_status'][fields[0]],'FAIL')
+            self.assertIn(code, exported['evidence_gaps'])
+            # An actual edit ends historical read-only treatment: fail wins.
+            row.locator(f'select[aria-label="{code} {fields[1]} Ergebnis"]').select_option('PASS')
+            expect(overall).to_have_value('FAIL')
+            overall.select_option('NOT_TESTED')
+            expect(overall).to_have_value('FAIL')
+            overall.select_option('PASS')
+            expect(overall).to_have_value('FAIL')
+            # Re-evaluation must be manual after fixing the observed failure.
+            row.locator(f'select[aria-label="{code} {fields[0]} Ergebnis"]').select_option('PASS')
+            expect(overall).to_have_value('FAIL')
+            overall.select_option('PASS')
+            expect(overall).to_have_value('PASS')
+        page.close()
+
     @staticmethod
     def _seconds(s):
         mm,ss = map(int,s.split(':'))
