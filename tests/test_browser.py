@@ -491,11 +491,37 @@ class ProjectorTimerBrowserTests(unittest.TestCase):
           const panel = document.querySelector('.native-projection');
           return panel?.contains(document.querySelector('#open-display')) &&
                  panel.contains(document.querySelector('#native-projector-release')) &&
-                 panel.nextElementSibling?.id === 'mini-preview' &&
+                 panel.parentElement?.classList.contains('layout') &&
                  document.querySelector('.guide').hidden;
         }"""))
         self.assertTrue(self.control.evaluate(
             'document.documentElement.scrollWidth <= window.innerWidth + 1'))
+        # Same native button is on the initial screen, before the timer,
+        # not after the entire preview section as in the baseline screenshot.
+        self.assertTrue(self.control.evaluate("""() => {
+          const b = document.querySelector('#open-display').getBoundingClientRect();
+          const timer = document.querySelector('.main-panel').getBoundingClientRect();
+          const panel = document.querySelector('.native-projection').getBoundingClientRect();
+          return b.top >= 0 && b.bottom <= innerHeight &&
+                 panel.bottom < timer.top && b.top < timer.top;
+        }"""))
+        self.assertTrue(self.control.evaluate("""() => {
+          const b = document.querySelector('#start').getBoundingClientRect();
+          return b.top >= 0 && b.bottom <= innerHeight;
+        }"""))
+        # No resize-driven button clone or lost event handler.
+        self.control.set_viewport_size({'width':1366,'height':768})
+        self.assertTrue(self.control.evaluate("""() => {
+          const timer = document.querySelector('.main-panel').getBoundingClientRect();
+          const panel = document.querySelector('.native-projection').getBoundingClientRect();
+          const preview = document.querySelector('.side-panel').getBoundingClientRect();
+          return panel.left > timer.right &&
+                 Math.abs(panel.left-preview.left) <= 2 &&
+                 panel.bottom < preview.top &&
+                 document.querySelectorAll('#open-display').length === 1 &&
+                 document.querySelectorAll('#native-projector-release').length === 1;
+        }"""))
+        self.control.set_viewport_size({'width':390,'height':844})
         project.click()
         expect(release).to_be_visible(timeout=2000)
         expect(self.control.locator('.native-projection')).to_have_attribute('data-status', 'active')
@@ -551,6 +577,16 @@ class ProjectorTimerBrowserTests(unittest.TestCase):
             expect(self.control.get_by_role('button', name='Auf Beamer projizieren')).to_be_enabled()
             self.control.screenshot(path=str(out / (label + '.png')),
                                     full_page=True, animations='disabled')
+            metrics = self.control.evaluate("""() => {
+              const panel = document.querySelector('.native-projection').getBoundingClientRect();
+              const project = document.querySelector('#open-display').getBoundingClientRect();
+              const start = document.querySelector('#start').getBoundingClientRect();
+              return {viewport:innerWidth, projectorY:Math.round(panel.y),
+                      projectorButtonBottom:Math.round(project.bottom),
+                      timerStartBottom:Math.round(start.bottom),
+                      horizontalOverflow:document.documentElement.scrollWidth-innerWidth};
+            }""")
+            print('UBF_NATIVE_ACTION_VISIBILITY', label, metrics, flush=True)
         self.control.set_viewport_size({'width':1120, 'height':800})
         self.control.get_by_role('button', name='3 Min.').click()
         self.control.get_by_role('button', name='Countdown starten').click()

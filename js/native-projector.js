@@ -17,10 +17,14 @@ if (native?.invoke) {
     '<select id="native-monitor"></select></label>' +
     '<div class="native-projector-actions"></div>' +
     '<button type="button" id="native-projector-release" hidden>Beamer freigeben</button>' +
-    '<p class="native-projection-note">Bei Windows muss der Laptop als Hauptanzeige eingerichtet sein. ' +
-    'Win + P → Erweitern.</p>';
-  const preview = document.querySelector('.mini-preview');
-  preview.parentNode.insertBefore(panel, preview);
+    '<details class="native-projection-note"><summary>Bildschirme einrichten</summary>' +
+    '<p>Win + P → Erweitern. Der Laptop muss als Hauptbildschirm eingerichtet sein.</p></details>';
+  // The fixed-label projector controls must be reachable before scrolling
+  // through the timer on a compact screen. Keep one native panel and one
+  // set of event handlers: CSS places it beside the preview on desktop and
+  // before the countdown on compact layouts without reparenting on resize.
+  const layout = document.querySelector('.layout');
+  layout.insertBefore(panel, layout.querySelector('.main-panel'));
   const actionGroup = panel.querySelector('.native-projector-actions');
   const release = panel.querySelector('#native-projector-release');
   openButton.classList.remove('outline', 'top-action');
@@ -57,15 +61,14 @@ if (native?.invoke) {
     openButton.textContent = active ? 'Projektion läuft' : 'Auf Beamer projizieren';
     openButton.disabled = busy || active || targets.length === 0;
     if (active) {
-      state.textContent = 'Projektionsfenster auf externem Bildschirm aktiv. ' +
-        'PowerPoint/Canva separat bereithalten: „Beamer freigeben“ schließt nur das Timerbild. ' +
-        'Die nächste Präsentation startet nicht automatisch.';
+      state.textContent = 'Projektion aktiv. „Beamer freigeben“ schließt nur den Timer. ' +
+        'PowerPoint/Canva startet nicht automatisch.';
     } else if (!targets.length) {
       state.textContent = 'Kein erweiterter Beamer erkannt. Win + P → Erweitern prüfen.';
     } else if (targets.length > 1) {
       state.textContent = 'Mehrere externe Monitore erkannt. Beamer vor dem Start auswählen.';
     } else {
-      state.textContent = 'Externer Bildschirm bereit. Ein Klick startet die Vollbildprojektion.';
+      state.textContent = 'Beamer erkannt. Bereit für Vollbildprojektion.';
     }
   }
 

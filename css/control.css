@@ -164,3 +164,35 @@ footer span { padding-inline: 7px; color: #a6b2bd; }
   button, #track-progress { transition: none; }
   .actions .primary:hover:not(:disabled) { transform: none; }
 }
+
+
+/* Native projector controls are a real top-level operating surface.
+   On desktop they remain alongside the timer, directly above the audience
+   preview; on compact screens the same controls lead the operator flow.
+   No cloned buttons or viewport-triggered DOM moves are involved. */
+.native-mode .layout {
+  grid-template-areas: "timer projector" "timer audience";
+  grid-template-columns: minmax(0,1.06fr) minmax(340px,.94fr);
+  grid-template-rows: auto 1fr;
+  row-gap: 14px;
+}
+.native-mode .layout > .main-panel { grid-area: timer; }
+.native-mode .layout > .native-projection { grid-area: projector; min-width: 0; }
+.native-mode .layout > .side-panel { grid-area: audience; }
+@media (max-width: 980px) {
+  .native-mode .layout {
+    grid-template-areas: "projector" "timer" "audience";
+    grid-template-columns: minmax(0,1fr);
+    grid-template-rows: auto auto auto;
+    row-gap: 16px;
+  }
+}
+@media (max-width: 540px) {
+  .native-mode .layout { row-gap: 12px; }
+  .native-mode .main-panel { padding: 17px 18px 19px; }
+  .native-mode .time-display { min-height: 139px; margin-top: 14px; padding: 13px 12px; }
+  .native-mode #current-time { font-size: clamp(57px,14vw,78px); margin: 8px 0 2px; }
+  .native-mode .small-track { margin-bottom: 17px; }
+  .native-mode .custom-header { margin-top: 15px; }
+  .native-mode .actions { margin-top: 16px; padding-top: 14px; }
+}
