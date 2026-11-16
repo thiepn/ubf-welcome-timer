@@ -89,13 +89,20 @@ den Live-Einsatz stoppen. Ein fehlender Build / fehlender Beamer ist
 | Verantwortliche Entscheidung für Testbetrieb / Live-Einsatz | NO_GO |
 
 **Messregel bei W05/W06:** Die Offline-Maske lässt einen **neuen PASS**
-für W05/W06 nur zu, wenn zu **beiden Varianten** getrennte Beobachtungen
-eingetragen wurden. Löschen eines Teilnachweises setzt PASS wieder auf
-NOT_TESTED. Ältere importierte JSON-Dateien behalten ihre ursprünglichen
-Statuswerte, kennzeichnen aber PASS ohne vollständige Teilnachweise sichtbar
-und im JSON-Feld `evidence_gaps` als unqualifiziert.
-Das ersetzt keine echte Prüfung und bewertet die Beobachtungstexte nicht
-automatisch.
+für W05/W06 nur zu, wenn **jede Variante separat mit PASS bewertet**
+und eine schriftliche Beobachtung dokumentiert wurde. Damit können zwei
+Notizen, die tatsächlich Fehlverhalten beschreiben, allein keinen PASS
+mehr ermöglichen. Ein Teiltest-FAIL setzt die neue Gesamtbewertung auf
+FAIL; die nachträgliche Korrektur eines Teiltests macht daraus nicht
+automatisch PASS. Das Löschen eines erforderlichen Teilnachweises setzt
+einen neu vergebenen PASS auf NOT_TESTED.
+Die Teilstatus stehen additiv in `steps.W05.extra_status` bzw.
+`steps.W06.extra_status`, ohne die JSON-Version 1 zu verändern.
+Ältere importierte JSON-Dateien behalten ursprüngliche Gesamtstatus und
+Notizen. Fehlende Teilstatus werden als NOT_TESTED dargestellt und ein
+historischer PASS im Feld `evidence_gaps` sichtbar als unqualifiziert
+gekennzeichnet. Der Operator muss Beobachtungstexte und tatsächliches
+Beamerbild eigenständig beurteilen; die Maske zertifiziert nichts automatisch.
 
 Aus dem Zuschauerraum beobachten und
 dokumentieren, ob Desktop, Taskleiste, private Referentenansicht,

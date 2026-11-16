@@ -83,10 +83,14 @@ und
    stehen zunächst **NOT_TESTED**. Metadaten und beobachtete PASS/FAIL
    eintragen; W05 PowerPoint (vorher/nachher) und W06 Canva
    (Vollbild/Präsentationsansicht) gesondert dokumentieren.
-   **W05/W06 PASS** ist erst nach Notizen zu **beiden** Varianten wählbar.
-   Falls ein Teilnachweis entfernt wird, springt der Status auf NOT_TESTED.
-   Importierte alte PASS-Werte bleiben als historische Einträge erhalten,
-   werden bei fehlenden Teilnachweisen aber sichtbar als unvollständig markiert.
+   **W05/W06 PASS** ist erst möglich, wenn beide Teilvarianten einzeln
+   auf **PASS** stehen und zu beiden ein Beobachtungstext vorliegt.
+   Ein Teilstatus **FAIL** führt die neue Gesamtbewertung auf FAIL;
+   danach niemals automatisch wieder auf PASS wechseln. Fehlt einem
+   neu vergebenen PASS später ein Teilnachweis, wird er NOT_TESTED.
+   Importierte ältere PASS-Werte bleiben als historische Einträge erhalten,
+   fehlende Teilstatus sind NOT_TESTED und der historische Gesamt-PASS
+   wird sichtbar als unvollständig markiert.
 4. Bei einer späteren Probe desselben Builds können die alten lokalen
    Ergebnisse wieder angezeigt werden. Das Formular markiert die
    **wiederhergestellte frühere Probe** sichtbar. Für den neuen Testtermin

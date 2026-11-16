@@ -856,6 +856,11 @@ class ProjectorTimerBrowserTests(unittest.TestCase):
             status.select_option('PASS')
             expect(status).to_have_value('NOT_TESTED')
             notes.nth(2).fill('Zweite Variante tatsächlich beobachtet')
+            # Notes alone are not a verdict. Both scenarios must be marked PASS.
+            status.select_option('PASS')
+            expect(status).to_have_value('NOT_TESTED')
+            for field in (['prepared','after'] if id=='W05' else ['full','presenter']):
+                row.locator(f'select[aria-label="{id} {field} Ergebnis"]').select_option('PASS')
             status.select_option('PASS')
             expect(status).to_have_value('PASS')
             notes.nth(1).fill('')
@@ -884,6 +889,77 @@ class ProjectorTimerBrowserTests(unittest.TestCase):
         self.assertEqual(saved['steps']['W05']['status'], 'PASS')
         self.assertEqual(saved['steps']['W05']['observation'], 'Alte Gesamtbewertung')
         self.assertEqual(saved['live_service'], 'NO_GO')
+        page.close()
+
+    def test_29_handoff_verdicts_fail_closed_and_legacy_json_remains(self):
+        # A nonempty note can describe a failure. Each scenario therefore
+        # needs a distinct human-selected verdict before overall PASS.
+        import json
+        page = self.context.new_page()
+        page.goto((ROOT / 'rehearsal' / 'ACCEPTANCE_OFFLINE.html').as_uri())
+        w05 = page.locator('.probe').nth(4)
+        summary = page.locator('#summary')
+        overall = page.locator('select[aria-label="W05 Status"]')
+        first = w05.locator('select[aria-label="W05 prepared Ergebnis"]')
+        second = w05.locator('select[aria-label="W05 after Ergebnis"]')
+        notes = w05.locator('textarea')
+        notes.nth(1).fill('Beamer zeigte die richtige Publikumsfolie')
+        notes.nth(2).fill('Nach Freigabe zeigte sich kurz der Desktop')
+        first.select_option('PASS')
+        second.select_option('FAIL')
+        expect(overall).to_have_value('FAIL')
+        overall.select_option('PASS')
+        expect(overall).to_have_value('NOT_TESTED')
+        expect(summary).to_contain_text('Live: NO_GO')
+        second.select_option('PASS')
+        overall.select_option('PASS')
+        expect(overall).to_have_value('PASS')
+        second.select_option('FAIL')
+        expect(overall).to_have_value('FAIL')
+        second.select_option('PASS')
+        expect(overall).to_have_value('FAIL')  # Never auto-promote a failed test
+        overall.select_option('PASS')
+        expect(overall).to_have_value('PASS')
+        notes.nth(1).fill('')
+        expect(overall).to_have_value('NOT_TESTED')
+        with page.expect_download() as dl:
+            page.locator('#export').click()
+        exported = json.loads(dl.value.path().read_text(encoding='utf-8'))
+        self.assertEqual(exported['schema'], 1)
+        self.assertEqual(exported['steps']['W05']['extra_status'],
+                         {'prepared':'PASS','after':'PASS'})
+        self.assertEqual(exported['steps']['W05']['status'], 'NOT_TESTED')
+        self.assertEqual(exported['live_service'], 'NO_GO')
+
+        # Import old schema-1 data with both narrative notes: no per-scenario
+        # verdicts existed then, so preserve the raw historical PASS but flag it.
+        legacy = {
+            'schema':1,
+            'source_commit':page.locator('#build-sha').text_content(),
+            'steps':{'W06':{'status':'PASS','observation':'Historische Bewertung',
+                            'extra':{'full':'Vollbild beobachtet',
+                                     'presenter':'Präsentationsansicht beobachtet'}}},
+            'meta':{'tester':'Altdaten'},
+            'live_service':'NO_GO'
+        }
+        page.locator('#import').set_input_files({
+            'name':'old.json','mimeType':'application/json',
+            'buffer':json.dumps(legacy).encode('utf-8')
+        })
+        w06 = page.locator('.probe').nth(5)
+        expect(page.locator('select[aria-label="W06 Status"]')).to_have_value('PASS')
+        expect(w06.locator('select[aria-label="W06 full Ergebnis"]')).to_have_value('NOT_TESTED')
+        expect(w06).to_have_attribute('data-status','unqualified')
+        expect(summary).to_contain_text('W06 PASS ohne vollständige Belege')
+        with page.expect_download() as dl:
+            page.locator('#export').click()
+        preserved = json.loads(dl.value.path().read_text(encoding='utf-8'))
+        self.assertIn('W06', preserved['evidence_gaps'])
+        self.assertEqual(preserved['steps']['W06']['status'], 'PASS')
+        self.assertEqual(preserved['steps']['W06']['observation'], 'Historische Bewertung')
+        self.assertEqual(preserved['steps']['W06']['extra']['full'], 'Vollbild beobachtet')
+        self.assertEqual(preserved['steps']['W06']['extra_status'],
+                         {'full':'NOT_TESTED','presenter':'NOT_TESTED'})
         page.close()
 
     @staticmethod
