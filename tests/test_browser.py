@@ -773,8 +773,9 @@ class ProjectorTimerBrowserTests(unittest.TestCase):
         page = self.context.new_page()
         page.goto((ROOT / 'rehearsal' / 'ACCEPTANCE_OFFLINE.html').as_uri())
         self.assertEqual(page.locator('.probe').count(), 8)
-        self.assertEqual(page.locator('.probe select').evaluate_all(
+        self.assertEqual(page.locator('.probe-head select').evaluate_all(
             "(items) => items.filter(x => x.value === 'NOT_TESTED').length"), 8)
+        self.assertEqual(page.locator('.probe select').count(), 12)
         expect(page.locator('#summary')).to_contain_text('0 von 8 geprüft')
         expect(page.locator('#summary')).to_contain_text('Live: NO_GO')
         self.assertTrue(page.locator('#summary').is_visible())
@@ -909,7 +910,8 @@ class ProjectorTimerBrowserTests(unittest.TestCase):
         second.select_option('FAIL')
         expect(overall).to_have_value('FAIL')
         overall.select_option('PASS')
-        expect(overall).to_have_value('NOT_TESTED')
+        expect(overall).to_have_value('FAIL')  # A known failed handoff stays FAIL
+        expect(summary).to_contain_text('1 FAIL')
         expect(summary).to_contain_text('Live: NO_GO')
         second.select_option('PASS')
         overall.select_option('PASS')

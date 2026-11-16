@@ -138,8 +138,11 @@ for(const [id,title,desc] of names){
  select.addEventListener('change',()=>{
   const node=stepNodes[id];node.legacyPass=false;
   if(select.value==='PASS'&&!hasHandoffEvidence(id,node)){
-   select.value='NOT_TESTED';changed();
-   if(hint)hint.textContent='PASS nicht übernommen: Beide Varianten benötigen Ergebnis PASS und Beobachtung.';
+   const failed=Object.values(node.outcomes).some(n=>n.value==='FAIL');
+   select.value=failed?'FAIL':'NOT_TESTED';changed();
+   if(hint)hint.textContent=failed?
+    'PASS nicht übernommen: Mindestens eine Übergabe-Variante ist FAIL.':
+    'PASS nicht übernommen: Beide Varianten benötigen Ergebnis PASS und Beobachtung.';
   }else changed();
  });
  observation.addEventListener('input',changed);
