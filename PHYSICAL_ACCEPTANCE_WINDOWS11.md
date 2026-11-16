@@ -21,14 +21,19 @@ deaktiviert; **Win + P → Erweitern**, nicht Duplizieren. Unter
 **Hauptbildschirm** sein. Den nativen Entwurfsstand ausschließlich in einem
 nicht-öffentlichen Probelauf testen. Nicht im Gottesdienst erproben.
 
-**Zugangshürde:** Für den nativen Entwurf gibt es derzeit **keine freigegebene
+**Zugangshürde:** Für den nativen Entwurf gibt es **keine freigegebene
 Windows-Installationsdatei**. Ein GitHub-Actions-PASS und der Browser-Fallback
-installieren die native App nicht. Ein lokaler Test erfordert einen autorisierten,
-aus exakt dokumentiertem Quellstand erzeugten Entwicklungs-Build. Dazu sind
-Windows 11, Node.js 20+, Rust stable (MSVC), Microsoft C++ Build Tools und
-WebView2 nötig; Befehle stehen in [NATIVE_WINDOWS.md](./NATIVE_WINDOWS.md).
-Ohne lauffähigen nativen Build W01–W07 **NOT_TESTED** lassen, nicht als PASS
-oder als App-FAIL auslegen. Hier wurde kein Build auf dem Kirchenlaptop erzeugt.
+installieren die native App nicht. Das lokale Probe-ZIP wird **auf einem
+vertrauenswürdigen Windows-x64-Buildrechner** aus einem genehmigten Quell-Commit
+erzeugt (Node.js 20+, Rust MSVC, Microsoft C++ Build Tools;
+[NATIVE_WINDOWS.md](./NATIVE_WINDOWS.md)). Auf dem **autorisierten
+Windows-11-x64-Kirchentestgerät** werden zum Starten der entpackten Probe
+weder Node.js noch Rust noch C++ Build Tools benötigt; Windows WebView2
+muss verfügbar sein. EXE und SHA nur aus der unabhängig genehmigten Quelle
+übernehmen; die enthaltenen Hashes ersetzen keine digitale Signatur.
+Ohne vorhandenes und lauffähiges Probe-ZIP W01–W07 **NOT_TESTED** lassen,
+nicht als PASS oder als App-FAIL auslegen. Hier wurde keine Probe auf
+dem Kirchenlaptop durchgeführt.
 
 **Kurzablauf für die Person am Laptop:** [HANDOFF_OPERATOR_CARD_DE.md](./HANDOFF_OPERATOR_CARD_DE.md).
 Vor Testbeginn nach Möglichkeit eine zweite Person am Zuschauerplatz
@@ -55,6 +60,11 @@ Ergebnisse als PASS markieren; nicht mögliche Fälle bleiben NOT_TESTED.
 ## Nachweise und Ergebnisprotokoll (erst vor Ort ausfüllen)
 
 Die tatsächliche Ausführung dokumentieren, nicht CI-Ergebnisse übertragen.
+Das Offline-Formular kann Ergebnisse einer **früheren Probe desselben Builds**
+lokal wiederherstellen und kennzeichnet diese jetzt ausdrücklich. Vor einem
+neuen Testtermin **Neue Probe beginnen** wählen und den Reset bestätigen;
+vorhandene Beobachtungen vorher als JSON exportieren. Niemals alte PASS-Werte
+als neue Vor-Ort-Ergebnisse übernehmen.
 Je Test W01–W08 den Zustand **PASS / FAIL / NOT_TESTED** und eine knappe
 Beobachtung eintragen. Bei FAIL einen reproduzierbaren Ablauf notieren und
 den Live-Einsatz stoppen. Ein fehlender Build / fehlender Beamer ist

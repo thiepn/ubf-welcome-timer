@@ -809,6 +809,25 @@ class ProjectorTimerBrowserTests(unittest.TestCase):
         })
         expect(page.locator('#msg')).to_contain_text('nicht übernommen')
         expect(page.locator('#summary')).to_contain_text('Live: NO_GO')
+        # A return visit must clearly identify an earlier rehearsal's results.
+        # Reset requires confirmation and cannot carry the old FAIL or notes
+        # into a new physical acceptance session.
+        page.reload()
+        expect(page.locator('#restored-session')).to_be_visible()
+        expect(page.locator('#restored-detail')).to_contain_text('früheren Probe')
+        expect(page.locator('select[aria-label="W05 Status"]')).to_have_value('FAIL')
+        page.once('dialog', lambda dialog: dialog.dismiss())
+        page.locator('#new-session').click()
+        expect(page.locator('select[aria-label="W05 Status"]')).to_have_value('FAIL')
+        page.once('dialog', lambda dialog: dialog.accept())
+        page.locator('#new-session').click()
+        expect(page.locator('#restored-session')).to_be_hidden()
+        expect(page.locator('select[aria-label="W05 Status"]')).to_have_value('NOT_TESTED')
+        expect(page.locator('#tester')).to_have_value('')
+        expect(page.locator('#summary')).to_contain_text('0 von 8 geprüft')
+        page.reload()
+        expect(page.locator('#restored-session')).to_be_hidden()
+        expect(page.locator('#summary')).to_contain_text('0 von 8 geprüft')
         page.close()
 
     @staticmethod

@@ -33,6 +33,8 @@ button:hover{filter:brightness(.97)}
 .summary{font-size:13px;font-weight:700;color:#425c72}
 #msg{min-height:23px;font-size:13px;color:#536c7e}
 .small{font-size:12px;color:#667c8f}
+.recovered{border-left:4px solid #a97744}
+.recovered[hidden]{display:none}
 @media(max-width:600px){.details{grid-template-columns:1fr}.sheet{padding:20px 12px}.card{padding:16px}.probe-head{display:block}.probe select{max-width:none;margin-top:10px}}
 @media print{body{background:white}.sheet{max-width:none;padding:0}.card{break-inside:avoid;border-radius:0;margin:10px 0}.controls{display:none}textarea{min-height:55px}input,select,textarea{border-color:#999}#msg{display:none}}
 </style>
@@ -46,6 +48,12 @@ button:hover{filter:brightness(.97)}
 <p class="warning">Live-Sonntagsgottesdienst: NO_GO. Alle acht Tests beginnen als NOT_TESTED.</p>
 <p class="small">Bauen/Quellstand: <strong id="build-sha">@@SOURCE_SHA@@</strong>. SHA im BUILD_MANIFEST.json unabhängig mit genehmigtem GitHub-Commit vergleichen.</p>
 </header>
+<section class="card recovered" id="restored-session" hidden aria-label="Frühere Probenergebnisse">
+<h2>Vorherige lokale Probe wiederhergestellt</h2>
+<p id="restored-detail">Dies sind alte lokale Beobachtungen, keine neue Abnahme.</p>
+<div class="row"><button id="new-session" type="button">Neue Probe beginnen</button></div>
+<p class="small">Für eine neue Probe vorher die alten Ergebnisse als JSON sichern. Der Button setzt Status und Eingaben nach Bestätigung zurück.</p>
+</section>
 <section class="card">
 <h2>Prüfaufbau</h2>
 <div class="details">
@@ -155,7 +163,38 @@ function apply(data){
  }
  changed();
 }
-try{const saved=localStorage.getItem('ubf-physical-rehearsal-v1-'+source);if(saved)apply(JSON.parse(saved));}catch{}
+function hasRecordedData(data){
+ if(keys.some(k=>typeof data.meta?.[k]==='string'&&data.meta[k].trim()))return true;
+ return Object.values(data.steps||{}).some(s=>
+  s?.status==='PASS'||s?.status==='FAIL'||
+  (typeof s?.observation==='string'&&!!s.observation.trim())||
+  Object.values(s?.extra||{}).some(v=>typeof v==='string'&&!!v.trim()));
+}
+field('new-session').addEventListener('click',()=>{
+ if(!window.confirm('Aktuelle Eingaben und lokal wiederhergestellte Ergebnisse zurücksetzen? Vorher bitte als JSON sichern.'))return;
+ for(const k of keys)field(k).value='';
+ for(const node of Object.values(stepNodes)){
+  node.select.value='NOT_TESTED';
+  node.observation.value='';
+  for(const extra of Object.values(node.fields))extra.value='';
+ }
+ field('restored-session').hidden=true;
+ field('msg').textContent='Neue Probe begonnen. Alle W01–W08 sind NOT_TESTED.';
+ changed();
+});
+try{
+ const saved=localStorage.getItem('ubf-physical-rehearsal-v1-'+source);
+ if(saved){
+  const data=JSON.parse(saved);
+  apply(data);
+  if(hasRecordedData(data)){
+   const timestamp=Date.parse(data.saved_at);
+   const when=Number.isFinite(timestamp)?new Date(timestamp).toLocaleString('de-DE'):'Zeitpunkt unbekannt';
+   field('restored-detail').textContent='Gespeicherte Beobachtungen vom '+when+' wurden geladen. Diese Werte gehören zu einer früheren Probe und dürfen nicht als neue Windows-11-/Beamer-Abnahme gelten.';
+   field('restored-session').hidden=false;
+  }
+ }
+}catch{}
 update();
 field('export').addEventListener('click',()=>{
  const blob=new Blob([JSON.stringify(snapshot(),null,2)],{type:'application/json'});

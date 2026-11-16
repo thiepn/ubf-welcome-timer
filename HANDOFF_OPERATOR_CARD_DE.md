@@ -83,7 +83,12 @@ und
    stehen zunächst **NOT_TESTED**. Metadaten und beobachtete PASS/FAIL
    eintragen; W05 PowerPoint (vorher/nachher) und W06 Canva
    (Vollbild/Präsentationsansicht) gesondert dokumentieren.
-4. Zum Ende die Ergebnisdatei über **Ergebnisse als JSON sichern**
+4. Bei einer späteren Probe desselben Builds können die alten lokalen
+   Ergebnisse wieder angezeigt werden. Das Formular markiert die
+   **wiederhergestellte frühere Probe** sichtbar. Für den neuen Testtermin
+   **Neue Probe beginnen** wählen und den Reset bestätigen; alte Ergebnisse
+   vorher als JSON sichern. **Alte PASS-Angaben niemals wiederverwenden.**
+5. Zum Ende die Ergebnisdatei über **Ergebnisse als JSON sichern**
    exportieren. Eine Datei auf einem autorisierten lokalen Datenträger
    aufbewahren. Das Formular übermittelt keine Daten und setzt
    niemals die Live-Freigabe.

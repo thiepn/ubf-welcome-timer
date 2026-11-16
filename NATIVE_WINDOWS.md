@@ -22,8 +22,10 @@ No F11, dragging a window or browser popup should be necessary. A native fullscr
 `bundle.active: false` und wurde weder installiert noch als Release
 bereitgestellt. Die folgenden Befehle sind ausschließlich ein **lokaler
 Entwicklungs- und Abnahmepfad**, keine bereits durchgeführte Installation.
-Für den realen Kirchengerätetest muss zuerst ein autorisierter,
-nachweislich lauffähiger Build am konkreten Windows-11-Gerät vorliegen.
+Für den realen Kirchengerätetest muss zuerst ein autorisiertes,
+nachweislich lauffähiges Probe-ZIP vorliegen; es kann auf einem separaten
+Windows-x64-Buildrechner erstellt und erst danach auf das Windows-11-Testgerät
+übertragen werden. Der Kirchenlaptop braucht dafür keine Entwicklungswerkzeuge.
 Die Browser-Version aus `Start-Timer.cmd` ist kein Test der nativen
 Monitor-Automatik.
 
