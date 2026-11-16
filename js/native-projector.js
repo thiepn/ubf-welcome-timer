@@ -32,6 +32,13 @@ if (native?.invoke) {
   actionGroup.append(openButton, release);
   document.body.classList.add('native-mode');
   guide.hidden = true;
+  // The browser's BroadcastChannel peer count is NOT authoritative for
+  // native WebView2 projector presence. It can claim "no window" while
+  // Tauri confirms an active projector (or count an unrelated browser tab).
+  // In native mode the panel above owns projector status; this is a preview.
+  const previewSection = document.querySelector('.side-panel');
+  previewSection.setAttribute('aria-label', 'Folienvorschau');
+  previewSection.querySelector('.side-heading h2').textContent = 'Folienvorschau';
   // Preview reflects the timer canvas, not proof of what the audience sees.
   caption.textContent = 'Vorschau · Timerbild ist noch nicht auf den Beamer projiziert.';
   const state = panel.querySelector('#native-projector-state');

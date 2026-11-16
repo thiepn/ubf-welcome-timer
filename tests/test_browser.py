@@ -137,6 +137,12 @@ class ProjectorTimerBrowserTests(unittest.TestCase):
         self.assertEqual(self.display.locator('button,input,nav').count(), 0)
         self.assertTrue(self.display.locator('body').evaluate('(el) => getComputedStyle(el).cursor === "none"'))
 
+    def test_01b_browser_fallback_retains_connection_status(self):
+        # Native-only UI simplification must not hide browser presence.
+        self.assertFalse(self.control.locator('#connection-status').is_hidden())
+        self.assertFalse(self.control.locator('#connection-dot').is_hidden())
+        expect(self.control.locator('.side-heading h2')).to_have_text('Publikumsansicht')
+
     def test_02_start_pause_resume_reset_return_and_sync(self):
         self.control.get_by_role('button',name='3 Min.').click()
         self.control.get_by_role('button',name='Countdown starten').click()
@@ -500,6 +506,12 @@ class ProjectorTimerBrowserTests(unittest.TestCase):
         self.assertTrue(self.control.evaluate(
             "document.body.classList.contains('native-mode')"))
         self.assertTrue(self.control.locator('.topbar-actions').is_hidden())
+        # Browser BroadcastChannel peer presence cannot certify native
+        # projector visibility. Never show contradictory connection claims.
+        expect(self.control.locator('.side-heading h2')).to_have_text('Folienvorschau')
+        expect(self.control.locator('.side-panel')).to_have_attribute('aria-label','Folienvorschau')
+        self.assertTrue(self.control.locator('#connection-status').is_hidden())
+        self.assertTrue(self.control.locator('#connection-dot').is_hidden())
         expect(self.control.locator('.preview-caption')).to_contain_text(
             'noch nicht auf den Beamer projiziert')
         self.assertTrue(self.control.evaluate("""() => {
@@ -634,6 +646,10 @@ class ProjectorTimerBrowserTests(unittest.TestCase):
         expect(panel).to_have_attribute('data-status','active')
         expect(panel).to_have_attribute('aria-busy','false')
         expect(release).to_be_visible()
+        # The screenshot baseline showed "BEAMER · AKTIV" beside the
+        # browser-only "Kein Projektionsfenster erkannt"; this is forbidden.
+        self.assertTrue(self.control.locator('#connection-status').is_hidden())
+        expect(self.control.locator('.side-heading h2')).to_have_text('Folienvorschau')
         self.assertTrue(project.is_hidden(), 'Inactive disabled opener wastes native action space')
         self.control.evaluate('window.__nativeHoldRelease = true')
         release.click()

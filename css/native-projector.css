@@ -68,3 +68,11 @@
 .native-projection[data-status="error"] { border-color: #e6ae8d; background: #fff8f3; }
 .native-projection[data-status="error"] #native-projector-state { color: #88411e; }
 .native-projection #native-projector-state { overflow-wrap: anywhere; }
+
+/* A browser peer-presence indicator is not a native projector status.
+   Keeping it beside Tauri's authoritative status produced contradictory
+   "Beamer · aktiv" / "Kein Projektionsfenster erkannt" in real screenshots.
+   Hide it only in native mode; browser fallback retains the indicator. */
+.native-mode .side-panel #connection-status,
+.native-mode .side-panel #connection-dot { display: none; }
+.native-mode .side-panel .side-heading { margin-bottom: 17px; }
