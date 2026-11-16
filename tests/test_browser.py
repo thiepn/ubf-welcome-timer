@@ -32,6 +32,11 @@ NATIVE_BRIDGE_MOCK = r"""(() => {
   window.__nativePopupWasCalled = false;
   window.__nativeDelayNextStatus = false;
   window.__nativePendingStatus = [];
+  window.__nativeHoldOpen = false;
+  window.__nativeHoldRelease = false;
+  window.__nativePendingActions = [];
+  window.__nativeForcedOpenError = '';
+  window.__nativeForcedReleaseError = '';
   window.open = () => { window.__nativePopupWasCalled = true; throw Error('native popup regression'); };
   window.__TAURI__ = {core: {invoke: async (command, args = {}) => {
     window.__nativeCalls.push({command, args});
@@ -47,13 +52,21 @@ NATIVE_BRIDGE_MOCK = r"""(() => {
       return window.__nativeActive;
     }
     if (command === 'open_projector') {
+      if (window.__nativeForcedOpenError) throw Error(window.__nativeForcedOpenError);
       if (!window.__nativeTargets.some(target => target.id === args.monitorKey)) {
         throw Error('Die Beameranordnung hat sich geändert.');
+      }
+      if (window.__nativeHoldOpen) {
+        await new Promise(resolve => { window.__nativePendingActions.push(resolve); });
       }
       window.__nativeActive = true;
       return;
     }
     if (command === 'release_projector') {
+      if (window.__nativeForcedReleaseError) throw Error(window.__nativeForcedReleaseError);
+      if (window.__nativeHoldRelease) {
+        await new Promise(resolve => { window.__nativePendingActions.push(resolve); });
+      }
       window.__nativeActive = false;
       return;
     }
@@ -597,6 +610,67 @@ class ProjectorTimerBrowserTests(unittest.TestCase):
         self.control.screenshot(path=str(out / 'native-paused-390x844.png'),
                                 full_page=True, animations='disabled')
         print('UBF_VISUAL_QA captured 7 screenshots; real church hardware NOT_TESTED', flush=True)
+
+    @unittest.skipUnless(os.environ.get('UBF_CAPTURE_UI') == '1', 'CI visual evidence only')
+    def test_22_capture_native_projector_operator_states(self):
+        # Browser Chromium capture with a controlled native bridge, not a
+        # Windows projector or a screenshot of PowerPoint/Canva.
+        out = ROOT / 'artifacts' / 'ui-qa'
+        out.mkdir(parents=True, exist_ok=True)
+        self.control.add_init_script(script=NATIVE_BRIDGE_MOCK)
+        self.control.reload()
+        self.control.set_viewport_size({'width':390,'height':844})
+        panel = self.control.locator('.native-projection')
+        project = self.control.locator('#open-display')
+        release = self.control.locator('#native-projector-release')
+        expect(project).to_be_enabled(timeout=4000)
+        self.control.screenshot(path=str(out / 'state-ready-390x844.png'),
+                                full_page=True, animations='disabled')
+
+        self.control.evaluate('window.__nativeHoldOpen = true')
+        project.click()
+        self.control.wait_for_function('window.__nativePendingActions.length === 1')
+        expect(panel).to_have_attribute('data-status','busy')
+        self.control.screenshot(path=str(out / 'state-opening-390x844.png'),
+                                full_page=True, animations='disabled')
+        self.control.evaluate('window.__nativePendingActions.shift()()')
+        expect(release).to_be_visible(timeout=2000)
+        expect(panel).to_have_attribute('data-status','active')
+        self.control.screenshot(path=str(out / 'state-active-390x844.png'),
+                                full_page=True, animations='disabled')
+
+        self.control.evaluate('window.__nativeHoldRelease = true')
+        release.click()
+        self.control.wait_for_function('window.__nativePendingActions.length === 1')
+        self.control.screenshot(path=str(out / 'state-releasing-390x844.png'),
+                                full_page=True, animations='disabled')
+        self.control.evaluate('window.__nativePendingActions.shift()()')
+        expect(project).to_be_enabled(timeout=2000)
+
+        self.control.evaluate("""() => {
+          window.__nativeTargets = [];
+          window.dispatchEvent(new Event('focus'));
+        }""")
+        expect(panel).to_have_attribute('data-status','missing',timeout=3000)
+        self.control.screenshot(path=str(out / 'state-disconnected-390x844.png'),
+                                full_page=True, animations='disabled')
+
+        self.control.evaluate("""() => {
+          window.__nativeTargets = [
+            {id:'PROJECTOR-A|1920|0|1920|1080',name:'Projektor A',width:1920,height:1080}
+          ];
+          window.dispatchEvent(new Event('focus'));
+        }""")
+        expect(project).to_be_enabled(timeout=3000)
+        self.control.evaluate("window.__nativeForcedOpenError = 'Die Beameranordnung hat sich geändert.'")
+        project.click()
+        expect(panel).to_have_attribute('data-status','error',timeout=2000)
+        self.control.screenshot(path=str(out / 'state-error-390x844.png'),
+                                full_page=True, animations='disabled')
+        self.control.wait_for_timeout(3300)
+        self.control.screenshot(path=str(out / 'state-error-after-poll-390x844.png'),
+                                full_page=True, animations='disabled')
+        print('UBF_NATIVE_STATES captured ready/opening/active/releasing/disconnected/error/error-after-poll',flush=True)
 
     @staticmethod
     def _seconds(s):
