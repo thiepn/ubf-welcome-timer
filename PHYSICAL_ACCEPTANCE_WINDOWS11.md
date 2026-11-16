@@ -88,7 +88,16 @@ den Live-Einsatz stoppen. Ein fehlender Build / fehlender Beamer ist
 | Beobachtungen aus Zuschauerperspektive (Foto/Video nur nach Zustimmung) | NOT_TESTED |
 | Verantwortliche Entscheidung für Testbetrieb / Live-Einsatz | NO_GO |
 
-**Messregel bei W05/W06:** Aus dem Zuschauerraum beobachten und
+**Messregel bei W05/W06:** Die Offline-Maske lässt einen **neuen PASS**
+für W05/W06 nur zu, wenn zu **beiden Varianten** getrennte Beobachtungen
+eingetragen wurden. Löschen eines Teilnachweises setzt PASS wieder auf
+NOT_TESTED. Ältere importierte JSON-Dateien behalten ihre ursprünglichen
+Statuswerte, kennzeichnen aber PASS ohne vollständige Teilnachweise sichtbar
+und im JSON-Feld `evidence_gaps` als unqualifiziert.
+Das ersetzt keine echte Prüfung und bewertet die Beobachtungstexte nicht
+automatisch.
+
+Aus dem Zuschauerraum beobachten und
 dokumentieren, ob Desktop, Taskleiste, private Referentenansicht,
 Benachrichtigungen oder ein falsches Fenster sichtbar werden. Eine
 „erfolgreiche“ Übergabe darf nicht bloß daraus abgeleitet werden, dass

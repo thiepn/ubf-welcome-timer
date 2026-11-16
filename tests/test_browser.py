@@ -840,6 +840,52 @@ class ProjectorTimerBrowserTests(unittest.TestCase):
         expect(page.locator('#summary')).to_contain_text('0 von 8 geprüft')
         page.close()
 
+    def test_28_handoff_pass_requires_both_observed_scenarios(self):
+        # Current worksheet previously accepted W05/W06 PASS without either
+        # handoff scenario being recorded; never treat that as qualified.
+        page = self.context.new_page()
+        page.goto((ROOT / 'rehearsal' / 'ACCEPTANCE_OFFLINE.html').as_uri())
+        for id, index in [('W05', 4), ('W06', 5)]:
+            row = page.locator('.probe').nth(index)
+            status = page.locator(f'select[aria-label="{id} Status"]')
+            status.select_option('PASS')
+            expect(status).to_have_value('NOT_TESTED')
+            expect(row.locator('.evidence-hint')).to_contain_text('nicht übernommen')
+            notes = row.locator('textarea')
+            notes.nth(1).fill('Erste Variante tatsächlich beobachtet')
+            status.select_option('PASS')
+            expect(status).to_have_value('NOT_TESTED')
+            notes.nth(2).fill('Zweite Variante tatsächlich beobachtet')
+            status.select_option('PASS')
+            expect(status).to_have_value('PASS')
+            notes.nth(1).fill('')
+            expect(status).to_have_value('NOT_TESTED')
+
+        # Legacy JSON must remain importable without rewriting its raw
+        # historical PASS, but the UI/export must flag missing evidence.
+        legacy = page.evaluate("""() => ({
+            schema:1,source_commit:document.getElementById('build-sha').textContent,
+            steps:{W05:{status:'PASS',observation:'Alte Gesamtbewertung',
+                        extra:{prepared:'',after:''}}},
+            meta:{tester:'Historischer Test'},live_service:'NO_GO'
+        })""")
+        import json
+        page.locator('#import').set_input_files({
+            'name':'legacy.json','mimeType':'application/json',
+            'buffer':json.dumps(legacy).encode('utf-8')
+        })
+        expect(page.locator('select[aria-label="W05 Status"]')).to_have_value('PASS')
+        expect(page.locator('#summary')).to_contain_text('W05 PASS ohne vollständige Belege')
+        expect(page.locator('.probe').nth(4)).to_have_attribute('data-status','unqualified')
+        with page.expect_download() as d:
+            page.locator('#export').click()
+        saved = json.loads(d.value.path().read_text(encoding='utf-8'))
+        self.assertIn('W05', saved['evidence_gaps'])
+        self.assertEqual(saved['steps']['W05']['status'], 'PASS')
+        self.assertEqual(saved['steps']['W05']['observation'], 'Alte Gesamtbewertung')
+        self.assertEqual(saved['live_service'], 'NO_GO')
+        page.close()
+
     @staticmethod
     def _seconds(s):
         mm,ss = map(int,s.split(':'))

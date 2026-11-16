@@ -22,6 +22,7 @@ input:focus,select:focus,textarea:focus,button:focus-visible{outline:3px solid #
 input[readonly]{background:#edf3f8;color:#3c5870}
 textarea{min-height:76px;resize:vertical}
 .probe{border-left:4px solid #b3c4d1}.probe[data-status=PASS]{border-left-color:#2e8a65}.probe[data-status=FAIL]{border-left-color:#c24b40}
+.probe[data-status=unqualified]{border-left-color:#a66d1f}.evidence-hint{color:#85551b;font-weight:650}
 .probe-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:8px}
 .probe-title{font-weight:800;font-size:16px}.probe-desc{color:#50677b;font-size:13px;margin:4px 0 7px}
 .probe select{max-width:170px;margin:0;min-height:43px;font-weight:700}
@@ -127,27 +128,57 @@ for(const [id,title,desc] of names){
  for(const [field,question] of extras[id]||[]){
   const l=el('label','note',question);const t=el('textarea');t.placeholder='Am Zuschauerplatz beobachten';l.append(t);card.append(l);fields[field]=t;
  }
- root.append(card);stepNodes[id]={card,select,observation,fields};
- select.addEventListener('change',changed);observation.addEventListener('input',changed);
- for(const x of Object.values(fields))x.addEventListener('input',changed);
+ const hint=extras[id]?el('p','note evidence-hint','PASS nur, wenn beide Varianten am Beamer beobachtet und getrennt dokumentiert wurden.'):null;
+ if(hint)card.append(hint);
+ root.append(card);stepNodes[id]={card,select,observation,fields,hint};
+ select.addEventListener('change',()=>{
+  const node=stepNodes[id];
+  if(select.value==='PASS'&&!hasHandoffEvidence(id,node)){
+   select.value='NOT_TESTED';changed();
+   hint.textContent='PASS nicht übernommen: Bitte zuerst beide Übergabe-Varianten dokumentieren.';
+  }else changed();
+ });
+ observation.addEventListener('input',changed);
+ for(const x of Object.values(fields))x.addEventListener('input',()=>{
+  const node=stepNodes[id];
+  const lost=select.value==='PASS'&&!hasHandoffEvidence(id,node);
+  if(lost)select.value='NOT_TESTED';
+  changed();
+  if(lost)hint.textContent='Ein Teilnachweis wurde entfernt. Status wieder NOT_TESTED.';
+ });
 }
 const field=(k)=>document.getElementById(k);
+function hasHandoffEvidence(id,node){
+ return !extras[id]||Object.values(node.fields).every(n=>n.value.trim().length>0);
+}
+function evidenceGaps(){
+ return Object.entries(stepNodes).filter(([id,node])=>
+  node.select.value==='PASS'&&!hasHandoffEvidence(id,node)).map(([id])=>id);
+}
 function snapshot(){
  const steps={};for(const [id,node] of Object.entries(stepNodes)){
   const extra={};for(const [k,n] of Object.entries(node.fields))extra[k]=n.value;
   steps[id]={status:node.select.value,observation:node.observation.value,extra};
  }
  const meta={};for(const k of keys)meta[k]=field(k).value;
- return {schema:1,source_commit:source,meta,steps,physical_acceptance:'operator-observations-only',live_service:'NO_GO',saved_at:new Date().toISOString()};
+ return {schema:1,source_commit:source,meta,steps,evidence_gaps:evidenceGaps(),physical_acceptance:'operator-observations-only',live_service:'NO_GO',saved_at:new Date().toISOString()};
 }
 function update(){
- let done=0,fail=0;
- for(const node of Object.values(stepNodes)){
-  const status=node.select.value;node.card.dataset.status=status;
-  if(status!=='NOT_TESTED')done++;
+ let done=0,fail=0,notTested=0;const gaps=evidenceGaps();
+ for(const [id,node] of Object.entries(stepNodes)){
+  const status=node.select.value,unqualified=gaps.includes(id);
+  node.card.dataset.status=unqualified?'unqualified':status;
+  if(status!=='NOT_TESTED'&&!unqualified)done++;
+  if(status==='NOT_TESTED')notTested++;
   if(status==='FAIL')fail++;
+  if(node.hint){
+   node.hint.textContent=unqualified?
+    'PASS ohne beide dokumentierten Übergaben ist nicht als vollständige Abnahme gewertet. Bitte Teilnachweise ergänzen.':
+    'PASS nur, wenn beide Varianten am Beamer beobachtet und getrennt dokumentiert wurden.';
+  }
  }
- field('summary').textContent=done+' von 8 geprüft · '+fail+' FAIL · '+(8-done)+' NOT_TESTED · Live: NO_GO';
+ field('summary').textContent=done+' von 8 geprüft · '+fail+' FAIL · '+notTested+' NOT_TESTED'+
+   (gaps.length?' · '+gaps.join(', ')+' PASS ohne vollständige Belege':'')+' · Live: NO_GO';
 }
 function changed(){update();try{localStorage.setItem('ubf-physical-rehearsal-v1-'+source,JSON.stringify(snapshot()));}catch{}}
 for(const k of keys)field(k).addEventListener('input',changed);
