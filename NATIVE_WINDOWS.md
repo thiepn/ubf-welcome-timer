@@ -183,3 +183,29 @@ native lifecycle and verifies the new WebView can be shown and subsequently
 released. Windows 11 hardware, HDMI disconnect, PowerPoint/Canva audience
 handoff, and a desktop-free switch remain **NOT_TESTED**. Live service
 remains **NO_GO** pending the physical acceptance matrix.
+
+## Lokales Windows-11-Probepaket (kein Release)
+
+Auf einem vertrauenswürdigen Windows-x64-Buildrechner mit Node.js 20+,
+Rust x86_64-pc-windows-msvc und Microsoft C++ Build Tools im **genau
+gewünschten PR-Quellstand** aus dem Repository-Stamm ausführen:
+
+    powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Build-Windows-Rehearsal.ps1
+
+Nur **lokal** entsteht `dist/UBF-Koeln-Timer-LOKALE-PROBE.zip` mit einer
+**unsignierten EXE**, `BUILD_MANIFEST.json` (Quell-SHA und SHA-256),
+originalem `welcome.png`-Fallback, Bedienkarte und W01–W08-Protokoll.
+Der Build prüft Git-Status, deaktiviertes Installer-Bundling und die
+unveränderten Canva-PNG-Hashes. **Kein Upload, Installer, Release, Deployment
+oder automatischer Start.** Die lokale ZIP kann erst nach ausdrücklicher
+Berechtigung auf den Testrechner übertragen und dort entpackt werden.
+Auf dem Zielrechner reicht Windows 11 x64 mit WebView2; dort muss nicht
+Rust/Node installiert werden. Vor dem Start SHA-256 kontrollieren;
+Sicherheitswarnungen bei unsignierten EXEs nicht blind umgehen.
+
+GitHub Actions baut dieselbe ZIP ausschließlich in PR #4 auf einem
+kurzlebigen Windows-Runner aus dem exakten PR-HEAD und **verwirft sie**.
+Es wird **keine ausführbare Datei als Artifact hochgeladen**. Ein grüner
+CI-Build beweist nur technische Kompilierung, nicht die tatsächliche
+Windows-11-/HDMI-/PowerPoint-/Canva-Probe. Alle W01–W08 bleiben NOT_TESTED,
+Live-Einsatz bleibt NO_GO.

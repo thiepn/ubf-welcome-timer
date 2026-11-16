@@ -110,3 +110,14 @@ jobs:
         run: cargo test --manifest-path src-tauri/Cargo.toml
       - name: Run real WebView2 dual-window timer propagation (no physical projector)
         run: node tests/native-webview2-smoke.mjs
+      # Draft PR #4 only. Windows CI makes and then discards a local ZIP;
+      # never upload runnable binaries or publish a release.
+      - name: Checkout exact PR HEAD for local rehearsal build
+        if: github.event_name == 'pull_request' && github.event.pull_request.number == 4
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Build local unsigned rehearsal ZIP (NO UPLOAD)
+        if: github.event_name == 'pull_request' && github.event.pull_request.number == 4
+        shell: powershell
+        run: .\scripts\Build-Windows-Rehearsal.ps1

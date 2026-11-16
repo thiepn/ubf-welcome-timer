@@ -81,3 +81,18 @@ test('Tauri frontend paths resolve within staged distribution without a local se
   assert.equal(statSync(join(stagedPath, 'control.html')).isFile(), true);
   assert.equal(statSync(join(stagedPath, 'display.html')).isFile(), true);
 });
+
+test('Windows rehearsal source build remains local-only', () => {
+  const s = file('scripts/Build-Windows-Rehearsal.ps1');
+  const y = file('.github/workflows/tests.yml');
+  assert.match(s, /git rev-parse --verify HEAD/);
+  assert.match(s, /git diff --quiet HEAD/);
+  assert.match(s, /bundle\.active -ne \$false/);
+  assert.match(s, /cargo' @\('build','--release'/);
+  assert.match(s, /Get-FileHash/);
+  assert.match(s, /Compress-Archive/);
+  assert.doesNotMatch(s, /Invoke-WebRequest|Invoke-RestMethod|Start-Process|gh release/);
+  assert.match(y, /pull_request\.head\.sha/);
+  assert.match(y, /pull_request\.number == 4/);
+  assert.doesNotMatch(y.slice(y.indexOf('  native-windows:')), /upload-artifact|release\/upload|deploy/);
+});
