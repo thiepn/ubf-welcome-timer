@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>UBF Köln — Beamer-Probe W01–W08</title>
+<style>
+:root{font:15px/1.5 "Segoe UI",Arial,sans-serif;color:#152d42;background:#f2f5f8}
+*{box-sizing:border-box}
+body{margin:0}.sheet{max-width:920px;margin:0 auto;padding:30px 22px 54px}
+h1{font-size:clamp(26px,4vw,36px);line-height:1.16;letter-spacing:-.035em;margin:7px 0 6px}
+h2{font-size:17px;margin:0 0 12px}p{margin:6px 0 14px}
+.top{border-bottom:1px solid #cfdae5;padding-bottom:19px;margin-bottom:20px}
+.kicker{font-size:11px;letter-spacing:.13em;font-weight:800;color:#11619c}
+.lead{color:#536a7e}.warning{font-weight:750;color:#8b421d}
+.card{background:white;border:1px solid #d7e1e9;border-radius:14px;padding:20px;margin:14px 0}
+.details{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+label{display:block;font-size:12px;font-weight:700;color:#425c72}
+input,select,textarea{display:block;font:inherit;margin-top:5px;border:1px solid #b9ccdc;border-radius:8px;padding:9px 11px;background:#fff;color:#162e43;width:100%}
+input:focus,select:focus,textarea:focus,button:focus-visible{outline:3px solid #79b3dd;outline-offset:2px}
+input[readonly]{background:#edf3f8;color:#3c5870}
+textarea{min-height:76px;resize:vertical}
+.probe{border-left:4px solid #b3c4d1}.probe[data-status=PASS]{border-left-color:#2e8a65}.probe[data-status=FAIL]{border-left-color:#c24b40}
+.probe-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:8px}
+.probe-title{font-weight:800;font-size:16px}.probe-desc{color:#50677b;font-size:13px;margin:4px 0 7px}
+.probe select{max-width:170px;margin:0;min-height:43px;font-weight:700}
+.note{font-size:12px;color:#566f83}.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+button{font:inherit;cursor:pointer;border:1px solid #9abbd7;background:#fff;color:#185581;border-radius:9px;padding:11px 16px;font-weight:700;min-height:44px}
+button.primary{background:#0f5eab;color:#fff;border-color:#0f5eab}
+button:hover{filter:brightness(.97)}
+.rules{padding-left:22px}.rules li{margin:7px 0}
+.summary{font-size:13px;font-weight:700;color:#425c72}
+#msg{min-height:23px;font-size:13px;color:#536c7e}
+.small{font-size:12px;color:#667c8f}
+@media(max-width:600px){.details{grid-template-columns:1fr}.sheet{padding:20px 12px}.card{padding:16px}.probe-head{display:block}.probe select{max-width:none;margin-top:10px}}
+@media print{body{background:white}.sheet{max-width:none;padding:0}.card{break-inside:avoid;border-radius:0;margin:10px 0}.controls{display:none}textarea{min-height:55px}input,select,textarea{border-color:#999}#msg{display:none}}
+</style>
+</head>
+<body>
+<main class="sheet">
+<header class="top">
+<div class="kicker">UBF KÖLN / GOTTESDIENSTTECHNIK / LOKALE PROBE</div>
+<h1>Beamer-Timer: Abnahme W01–W08</h1>
+<p class="lead">Nur am echten Windows-11-Laptop und Beamer ausfüllen. Kein CI-Test gilt als vor Ort beobachtetes Ergebnis.</p>
+<p class="warning">Live-Sonntagsgottesdienst: NO_GO. Alle acht Tests beginnen als NOT_TESTED.</p>
+<p class="small">Bauen/Quellstand: <strong id="build-sha">@@SOURCE_SHA@@</strong>. SHA im BUILD_MANIFEST.json unabhängig mit genehmigtem GitHub-Commit vergleichen.</p>
+</header>
+<section class="card">
+<h2>Prüfaufbau</h2>
+<div class="details">
+<label>Datum und Uhrzeit<input id="date" type="datetime-local"></label>
+<label>Prüfperson / Beobachtung aus Zuschauerraum<input id="tester" placeholder="Wer hat geprüft?"></label>
+<label>Windows 11 / Laptop-Modell<input id="laptop" placeholder="Gerät und Windows-Build"></label>
+<label>Beamer / HDMI / Adapter<input id="projector" placeholder="Projektor und Signalweg"></label>
+<label>Bildschirm-Anordnung / Hauptanzeige / Skalierung<input id="displays" placeholder="Laptop primär, Erweitern; 100/125/150 %"></label>
+<label>PowerPoint-Version / Canva-Browser / Internetzustand<input id="presentations" placeholder="Versionen und Online-/Offline-Zustand"></label>
+</div>
+</section>
+<section class="card">
+<h2>Reihenfolge beim Übergang</h2>
+<ol class="rules">
+<li><strong>Vorbereitung:</strong> Win + P → Erweitern; Laptop bleibt Hauptanzeige. Zuschauerbeobachter am Beamer platzieren.</li>
+<li><strong>W05 PowerPoint:</strong> Zielmonitor manuell prüfen. Einmal bereits gestartete Präsentation hinter dem Timer testen, einmal erst nach <em>Beamer freigeben</em> starten. Referentenansicht darf nicht auf dem Beamer erscheinen.</li>
+<li><strong>W06 Canva:</strong> Vollbild und Präsentationsansicht getrennt testen. Teilnehmerfenster gehört zum Beamer, Notizen/Steuerung auf den Laptop. Beide Handoff-Varianten dokumentieren.</li>
+<li><strong>Desktop-Flash:</strong> Bei W05/W06 notieren, ob Desktop, Taskleiste, Benachrichtigungen oder falsche Folien sichtbar werden; das ist keine automatisch nahtlose Übergabe.</li>
+<li><strong>Abbruch:</strong> Bei falschem Monitor, Kontrollverlust, privater Ansicht auf dem Beamer, unerwartetem Reset oder Handoff-Störung den Probelauf stoppen und FAIL dokumentieren.</li>
+</ol>
+</section>
+<div id="steps" aria-label="Acht reale Abnahmetests"></div>
+<section class="card">
+<h2>Zusammenfassung</h2>
+<p id="summary" class="summary" role="status">0 von 8 geprüft; alle NOT_TESTED.</p>
+<p class="warning">Dieses Protokoll erteilt KEINE Live-Freigabe — auch nicht bei achtmal PASS.</p>
+<div class="controls row">
+<button id="export" type="button" class="primary">Ergebnisse als JSON sichern</button>
+<label style="font-size:13px">Vorherige Ergebnisse laden<input id="import" type="file" accept="application/json,.json"></label>
+<button id="print" type="button">Drucken / als PDF sichern</button>
+</div>
+<p id="msg" role="status"></p>
+<p class="small">Offline: keine Anmeldung, keine Netzwerkverbindung, keine automatischen Uploads. Für dauerhafte Sicherung JSON exportieren. Lokale Browser-Zwischenspeicherung ist nicht garantiert.</p>
+</section>
+</main>
+<script>
+(() => {
+'use strict';
+const source = document.getElementById('build-sha').textContent;
+const names = [
+['W01','Projektion / Fokus','Controller nur auf Laptop, Welcome ausschließlich vollflächig auf Beamer; keine Fensterbewegung oder F11'],
+['W02','Timer offline','Internet aus, App neu starten, Original-Welcome und Countdown ohne Server betriebsfähig'],
+['W03','10-Sekunden-Countdown','Start / Pause / Weiter / 00:00 / Willkommen; Beamer und Steuerung synchron, Ring unverzerrt'],
+['W04','Freigeben und neu projizieren','Projektion während laufendem Timer freigeben, sofort erneut öffnen; Laptop-Fokus und Timer bleiben erhalten'],
+['W05','PowerPoint-Übergabe','Zielmonitor / Referentenansicht korrekt; vorbereitete vs. erst später gestartete Präsentation getrennt prüfen'],
+['W06','Canva-Übergabe','Vollbild und Präsentationsansicht getrennt; Teilnehmerfenster auf Beamer, Notizen nur auf Laptop'],
+['W07','HDMI abziehen / neu verbinden','Beamer während Timer abziehen und erneut verbinden; nie Controller auf Beamer oder Projektor auf Laptop'],
+['W08','Notfallbild / Rückfall','Native App schließen; unverändertes welcome.png oder tatsächlich vorhandenen Browser-Fallback demonstrieren']
+];
+const extras = {
+W05:[['prepared','PowerPoint bereits vorbereitet / gestartet: Was sah das Publikum?'],['after','PowerPoint erst nach Freigabe gestartet: Desktop-Flash / Verzögerung?']],
+W06:[['full','Canva Vollbild: Zielanzeige, Handoff, Desktop-Flash?'],['presenter','Canva Präsentationsansicht: Teilnehmerfenster / Notizen / Handoff?']]
+};
+const keys=['date','tester','laptop','projector','displays','presentations'];
+const statuses=['NOT_TESTED','PASS','FAIL'];
+const stepNodes={};
+const root=document.getElementById('steps');
+function el(tag,cls,text){
+ const n=document.createElement(tag);if(cls)n.className=cls;if(text!==undefined)n.textContent=text;return n;
+}
+for(const [id,title,desc] of names){
+ const card=el('section','card probe');card.dataset.status='NOT_TESTED';
+ const header=el('div','probe-head');
+ const left=el('div');left.append(el('div','probe-title',id+' · '+title),el('p','probe-desc',desc));
+ const select=el('select');select.setAttribute('aria-label',id+' Status');
+ for(const s of statuses){const opt=el('option','',s);opt.value=s;select.append(opt);}
+ header.append(left,select);
+ const label=el('label','note','Beobachtung am tatsächlichen Beamer / Reproduktionsschritte');
+ const observation=el('textarea');observation.placeholder='Noch nicht geprüft';label.append(observation);
+ card.append(header,label);const fields={};
+ for(const [field,question] of extras[id]||[]){
+  const l=el('label','note',question);const t=el('textarea');t.placeholder='Am Zuschauerplatz beobachten';l.append(t);card.append(l);fields[field]=t;
+ }
+ root.append(card);stepNodes[id]={card,select,observation,fields};
+ select.addEventListener('change',changed);observation.addEventListener('input',changed);
+ for(const x of Object.values(fields))x.addEventListener('input',changed);
+}
+const field=(k)=>document.getElementById(k);
+function snapshot(){
+ const steps={};for(const [id,node] of Object.entries(stepNodes)){
+  const extra={};for(const [k,n] of Object.entries(node.fields))extra[k]=n.value;
+  steps[id]={status:node.select.value,observation:node.observation.value,extra};
+ }
+ const meta={};for(const k of keys)meta[k]=field(k).value;
+ return {schema:1,source_commit:source,meta,steps,physical_acceptance:'operator-observations-only',live_service:'NO_GO',saved_at:new Date().toISOString()};
+}
+function update(){
+ let done=0,fail=0;
+ for(const node of Object.values(stepNodes)){
+  const status=node.select.value;node.card.dataset.status=status;
+  if(status!=='NOT_TESTED')done++;
+  if(status==='FAIL')fail++;
+ }
+ field('summary').textContent=done+' von 8 geprüft · '+fail+' FAIL · '+(8-done)+' NOT_TESTED · Live: NO_GO';
+}
+function changed(){update();try{localStorage.setItem('ubf-physical-rehearsal-v1-'+source,JSON.stringify(snapshot()));}catch{}}
+for(const k of keys)field(k).addEventListener('input',changed);
+function apply(data){
+ if(!data||data.schema!==1||data.source_commit!==source||!data.steps||typeof data.steps!=='object')throw Error('Ungültige Datei oder abweichende Quell-SHA. Keine Ergebnisse übernommen.');
+ const meta=data.meta||{};
+ for(const k of keys)field(k).value=typeof meta[k]==='string'?meta[k]:'';
+ for(const [id,node] of Object.entries(stepNodes)){
+  const s=data.steps[id]||{};
+  node.select.value=statuses.includes(s.status)?s.status:'NOT_TESTED';
+  node.observation.value=typeof s.observation==='string'?s.observation:'';
+  for(const [k,n] of Object.entries(node.fields))n.value=typeof s.extra?.[k]==='string'?s.extra[k]:'';
+ }
+ changed();
+}
+try{const saved=localStorage.getItem('ubf-physical-rehearsal-v1-'+source);if(saved)apply(JSON.parse(saved));}catch{}
+update();
+field('export').addEventListener('click',()=>{
+ const blob=new Blob([JSON.stringify(snapshot(),null,2)],{type:'application/json'});
+ const url=URL.createObjectURL(blob);const link=document.createElement('a');
+ link.href=url;link.download='UBF-Beamer-Probe-'+source.slice(0,12)+'.json';document.body.append(link);link.click();link.remove();
+ setTimeout(()=>URL.revokeObjectURL(url),1000);
+ field('msg').textContent='JSON gesichert. Datei außerhalb des Browser-Zwischenspeichers sicher ablegen.';
+});
+field('import').addEventListener('change',async(e)=>{
+ try{const f=e.target.files?.[0];if(!f)return;apply(JSON.parse(await f.text()));field('msg').textContent='Ergebnisse für die gleiche Quell-SHA geladen.';}
+ catch(err){field('msg').textContent='Import nicht übernommen: '+err.message;}
+ e.target.value='';
+});
+field('print').addEventListener('click',()=>window.print());
+})();
+</script>
+</body>
+</html>
