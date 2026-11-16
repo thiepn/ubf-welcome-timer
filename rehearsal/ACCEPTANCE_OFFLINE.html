@@ -151,7 +151,7 @@ function update(){
 }
 function changed(){update();try{localStorage.setItem('ubf-physical-rehearsal-v1-'+source,JSON.stringify(snapshot()));}catch{}}
 for(const k of keys)field(k).addEventListener('input',changed);
-function apply(data){
+function apply(data,persist=true){
  if(!data||data.schema!==1||data.source_commit!==source||!data.steps||typeof data.steps!=='object')throw Error('Ungültige Datei oder abweichende Quell-SHA. Keine Ergebnisse übernommen.');
  const meta=data.meta||{};
  for(const k of keys)field(k).value=typeof meta[k]==='string'?meta[k]:'';
@@ -161,7 +161,7 @@ function apply(data){
   node.observation.value=typeof s.observation==='string'?s.observation:'';
   for(const [k,n] of Object.entries(node.fields))n.value=typeof s.extra?.[k]==='string'?s.extra[k]:'';
  }
- changed();
+ if(persist)changed();else update();
 }
 function hasRecordedData(data){
  if(keys.some(k=>typeof data.meta?.[k]==='string'&&data.meta[k].trim()))return true;
@@ -186,11 +186,11 @@ try{
  const saved=localStorage.getItem('ubf-physical-rehearsal-v1-'+source);
  if(saved){
   const data=JSON.parse(saved);
-  apply(data);
+  apply(data,false);
   if(hasRecordedData(data)){
    const timestamp=Date.parse(data.saved_at);
    const when=Number.isFinite(timestamp)?new Date(timestamp).toLocaleString('de-DE'):'Zeitpunkt unbekannt';
-   field('restored-detail').textContent='Gespeicherte Beobachtungen vom '+when+' wurden geladen. Diese Werte gehören zu einer früheren Probe und dürfen nicht als neue Windows-11-/Beamer-Abnahme gelten.';
+   field('restored-detail').textContent='Zuletzt gespeicherte Eingaben: '+when+'. Diese Daten wurden wiederhergestellt. Diese Werte gehören zu einer früheren Probe und dürfen nicht als neue Windows-11-/Beamer-Abnahme gelten.';
    field('restored-session').hidden=false;
   }
  }

@@ -812,7 +812,17 @@ class ProjectorTimerBrowserTests(unittest.TestCase):
         # A return visit must clearly identify an earlier rehearsal's results.
         # Reset requires confirmation and cannot carry the old FAIL or notes
         # into a new physical acceptance session.
+        saved_at_before_reload = page.evaluate("""() => {
+            const key='ubf-physical-rehearsal-v1-'+document.getElementById('build-sha').textContent;
+            return JSON.parse(localStorage.getItem(key)).saved_at;
+        }""")
         page.reload()
+        saved_at_after_reload = page.evaluate("""() => {
+            const key='ubf-physical-rehearsal-v1-'+document.getElementById('build-sha').textContent;
+            return JSON.parse(localStorage.getItem(key)).saved_at;
+        }""")
+        self.assertEqual(saved_at_before_reload, saved_at_after_reload,
+                         'Simply reopening must not falsify the last-saved timestamp')
         expect(page.locator('#restored-session')).to_be_visible()
         expect(page.locator('#restored-detail')).to_contain_text('früheren Probe')
         expect(page.locator('select[aria-label="W05 Status"]')).to_have_value('FAIL')
