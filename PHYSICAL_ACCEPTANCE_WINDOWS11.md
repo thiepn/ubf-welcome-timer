@@ -72,7 +72,12 @@ separat den Dateiexport fest. Alte schema-1-Dateien ohne `saved_at` behalten
 einen unbekannten Zeitpunkt (`null`), statt fälschlich als heute geprüft
 zu gelten. Erst die tatsächliche Bearbeitung schreibt ein neues `saved_at`.
 Je Test W01–W08 den Zustand **PASS / FAIL / NOT_TESTED** und eine knappe
-Beobachtung eintragen. Bei FAIL einen reproduzierbaren Ablauf notieren und
+Beobachtung eintragen. Für W01–W04 und W07–W08 ist ein neuer PASS ohne
+Beobachtung gesperrt; das Entfernen der Beobachtung setzt einen neuen PASS
+wieder auf NOT_TESTED. Historische schema-1-PASS-Werte ohne Notiz bleiben
+erhalten, zählen aber sichtbar als unqualifiziert unter `evidence_gaps`.
+W05/W06 behalten ihre zwei separaten Teiltest-Status und Beobachtungen.
+Bei FAIL einen reproduzierbaren Ablauf notieren und
 den Live-Einsatz stoppen. Ein fehlender Build / fehlender Beamer ist
 **NOT_TESTED**, kein PASS und kein beobachteter App-Defekt.
 

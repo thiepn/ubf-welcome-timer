@@ -1078,6 +1078,51 @@ class ProjectorTimerBrowserTests(unittest.TestCase):
         expect(page.locator('#restored-session')).to_be_hidden()
         page.close()
 
+    def test_32_all_other_passes_require_observations(self):
+        # W01-04/W07-08 previously allowed PASS without any audience note.
+        import json
+        page = self.context.new_page()
+        page.goto((ROOT / 'rehearsal' / 'ACCEPTANCE_OFFLINE.html').as_uri())
+        for id in ('W01','W02','W03','W04','W07','W08'):
+            card = page.locator('.probe').nth(int(id[-2:])-1)
+            status = page.locator(f'select[aria-label="{id} Status"]')
+            note = card.locator('textarea').first
+            status.select_option('PASS')
+            expect(status).to_have_value('NOT_TESTED')
+            expect(card.locator('.evidence-hint')).to_contain_text('echte Beobachtung')
+            note.fill('Reales Beamerbild aus Publikumsperspektive geprüft')
+            status.select_option('PASS')
+            expect(status).to_have_value('PASS')
+            note.fill(' ')
+            expect(status).to_have_value('NOT_TESTED')
+        expect(page.locator('#summary')).to_contain_text('0 von 8 geprüft')
+        expect(page.locator('#summary')).to_contain_text('Live: NO_GO')
+        legacy={'schema':1,'source_commit':page.locator('#build-sha').text_content(),
+                'steps':{'W01':{'status':'PASS','observation':''},
+                         'W08':{'status':'PASS','observation':'  '}},
+                'meta':{'tester':'Frühere Probe'},
+                'saved_at':'2026-11-03T12:34:56Z','live_service':'NO_GO'}
+        page.locator('#import').set_input_files({
+            'name':'old.json','mimeType':'application/json',
+            'buffer':json.dumps(legacy).encode('utf-8')
+        })
+        expect(page.locator('select[aria-label="W01 Status"]')).to_have_value('PASS')
+        expect(page.locator('select[aria-label="W08 Status"]')).to_have_value('PASS')
+        expect(page.locator('.probe').nth(0)).to_have_attribute('data-status','unqualified')
+        expect(page.locator('.probe').nth(7)).to_have_attribute('data-status','unqualified')
+        expect(page.locator('#summary')).to_contain_text('0 von 8 geprüft')
+        expect(page.locator('#summary')).to_contain_text('W01, W08 PASS ohne vollständige Belege')
+        with page.expect_download() as d:
+            page.locator('#export').click()
+        data=json.loads(d.value.path().read_text(encoding='utf-8'))
+        self.assertEqual(data['schema'],1)
+        self.assertEqual(data['steps']['W01']['status'],'PASS')
+        self.assertEqual(data['steps']['W08']['status'],'PASS')
+        self.assertEqual(data['evidence_gaps'],['W01','W08'])
+        self.assertEqual(data['saved_at'],'2026-11-03T12:34:56Z')
+        self.assertEqual(data['live_service'],'NO_GO')
+        page.close()
+
     @staticmethod
     def _seconds(s):
         mm,ss = map(int,s.split(':'))

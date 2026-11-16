@@ -133,8 +133,10 @@ for(const [id,title,desc] of names){
   const t=el('textarea');t.placeholder='Am Zuschauerplatz beobachten';
   l.append(outcome,t);card.append(l);fields[field]=t;outcomes[field]=outcome;
  }
- const hint=extras[id]?el('p','note evidence-hint','Für PASS müssen beide Varianten PASS sein und jeweils eine Beobachtung enthalten.'):null;
- if(hint)card.append(hint);
+ const hint=el('p','note evidence-hint',extras[id]?
+  'Für PASS müssen beide Varianten PASS sein und jeweils eine Beobachtung enthalten.':
+  'PASS nur nach dokumentierter Beobachtung am echten Beamer.');
+ card.append(hint);
  root.append(card);stepNodes[id]={card,select,observation,fields,outcomes,hint,legacyPass:false};
  select.addEventListener('change',()=>{
   const node=stepNodes[id];node.legacyPass=false;
@@ -143,12 +145,20 @@ for(const [id,title,desc] of names){
    // or PASS at the overall level. Correct the variant itself first.
    select.value='FAIL';changed();
    if(hint)hint.textContent='Mindestens eine Übergabe-Variante ist FAIL. Der Gesamtstatus bleibt FAIL.';
-  }else if(select.value==='PASS'&&!hasHandoffEvidence(id,node)){
+  }else if(select.value==='PASS'&&!hasStepEvidence(id,node)){
    select.value='NOT_TESTED';changed();
-   if(hint)hint.textContent='PASS nicht übernommen: Beide Varianten benötigen Ergebnis PASS und Beobachtung.';
+   hint.textContent=extras[id]?
+    'PASS nicht übernommen: Beide Varianten benötigen Ergebnis PASS und Beobachtung.':
+    'PASS nicht übernommen: Bitte zuerst eine echte Beobachtung dokumentieren.';
   }else changed();
  });
- observation.addEventListener('input',changed);
+ observation.addEventListener('input',()=>{
+  const node=stepNodes[id];node.legacyPass=false;
+  if(select.value==='PASS'&&!hasStepEvidence(id,node)){
+   select.value='NOT_TESTED';changed();
+   if(!extras[id])hint.textContent='Beobachtung entfernt: Status wieder NOT_TESTED.';
+  }else changed();
+ });
  function scenarioChanged(){
   const node=stepNodes[id];
   // Import is read-only, but a new edit is a current operator decision.
@@ -174,9 +184,12 @@ function hasHandoffEvidence(id,node){
 function hasFailedScenario(node){
  return Object.values(node.outcomes).some(n=>n.value==='FAIL');
 }
+function hasStepEvidence(id,node){
+ return extras[id]?hasHandoffEvidence(id,node):node.observation.value.trim().length>0;
+}
 function evidenceGaps(){
  return Object.entries(stepNodes).filter(([id,node])=>
-  node.select.value==='PASS'&&!hasHandoffEvidence(id,node)).map(([id])=>id);
+  node.select.value==='PASS'&&!hasStepEvidence(id,node)).map(([id])=>id);
 }
 function snapshot(){
  const steps={};for(const [id,node] of Object.entries(stepNodes)){
@@ -205,8 +218,12 @@ function update(){
      'Teiltest FAIL: Historischer Gesamtstatus PASS bleibt im Datensatz erhalten, zählt hier aber als FAIL.':
      'Mindestens eine Übergabe-Variante ist FAIL. Gesamtbewertung: FAIL.'):
     unqualified?
-     'Historischer PASS ohne zwei bestätigte Teiltests (Ergebnis PASS + Beobachtung) ist keine qualifizierte Abnahme.':
-     'PASS nur, wenn beide Varianten jeweils Ergebnis PASS und eine Beobachtung haben.';
+     (extras[id]?
+      'Historischer PASS ohne zwei bestätigte Teiltests (Ergebnis PASS + Beobachtung) ist keine qualifizierte Abnahme.':
+      'Historischer PASS ohne dokumentierte Beobachtung zählt nicht als abgeschlossene Abnahme.'):
+     (extras[id]?
+      'PASS nur, wenn beide Varianten jeweils Ergebnis PASS und eine Beobachtung haben.':
+      'PASS nur nach dokumentierter Beobachtung am echten Beamer.');
   }
  }
  field('summary').textContent=done+' von 8 geprüft · '+fail+' FAIL · '+notTested+' NOT_TESTED'+
@@ -238,7 +255,7 @@ function apply(data,persist=true){
   for(const [k,n] of Object.entries(node.outcomes))n.value=statuses.includes(s.extra_status?.[k])?s.extra_status[k]:'NOT_TESTED';
   // Keep imported historical PASS verbatim; missing per-variant results remain
   // visibly unqualified. New PASS selections must satisfy the stricter gate.
-  node.legacyPass=s.status==='PASS'&&!hasHandoffEvidence(id,node);
+  node.legacyPass=s.status==='PASS'&&!hasStepEvidence(id,node);
  }
  lastSavedAt=readSavedAt(data);
  update();

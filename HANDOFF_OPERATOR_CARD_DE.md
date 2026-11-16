@@ -81,7 +81,9 @@ und
    Windows-Sicherheitsmeldungen nicht unbesehen umgehen.
 3. `ABNAHME_W01-W08.html` im Browser offline öffnen. Alle acht Tests
    stehen zunächst **NOT_TESTED**. Metadaten und beobachtete PASS/FAIL
-   eintragen; W05 PowerPoint (vorher/nachher) und W06 Canva
+   eintragen. W01–W04 und W07–W08 brauchen für PASS eine dokumentierte
+   Beobachtung; ältere PASS ohne Notiz zählen nicht als abgeschlossen.
+   W05 PowerPoint (vorher/nachher) und W06 Canva
    (Vollbild/Präsentationsansicht) gesondert dokumentieren.
    **W05/W06 PASS** ist erst möglich, wenn beide Teilvarianten einzeln
    auf **PASS** stehen und zu beiden ein Beobachtungstext vorliegt.
