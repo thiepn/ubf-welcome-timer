@@ -26,8 +26,10 @@ if (native?.invoke) {
   openButton.classList.remove('outline', 'top-action');
   openButton.classList.add('native-open');
   actionGroup.append(openButton, release);
+  document.body.classList.add('native-mode');
   guide.hidden = true;
-  caption.textContent = 'Vorschau · Die echte Projektion läuft auf dem zweiten Windows-Bildschirm.';
+  // Preview reflects the timer canvas, not proof of what the audience sees.
+  caption.textContent = 'Vorschau · Timerbild ist noch nicht auf den Beamer projiziert.';
   const state = panel.querySelector('#native-projector-state');
   const selectorLabel = panel.querySelector('#native-monitor-label');
   const selector = panel.querySelector('#native-monitor');
@@ -46,6 +48,9 @@ if (native?.invoke) {
 
   function render() {
     panel.dataset.status = busy ? 'busy' : active ? 'active' : targets.length ? 'ready' : 'missing';
+    caption.textContent = active
+      ? 'Vorschau · Projektion am tatsächlichen Beamer prüfen.'
+      : 'Vorschau · Timerbild ist noch nicht auf den Beamer projiziert.';
     selectorLabel.hidden = targets.length <= 1;
     releaseButton.hidden = !active;
     releaseButton.disabled = busy;

@@ -455,15 +455,23 @@ class ProjectorTimerBrowserTests(unittest.TestCase):
         self.assertGreaterEqual(right['y'], left['y'] + left['height'] - 2)
         self.assertTrue(self.control.evaluate(
             'document.documentElement.scrollWidth <= window.innerWidth + 1'))
-        for selector in ('#start', '#reset', '#welcome', '.preset.active'):
-            self.assertGreaterEqual(self.control.locator(selector).bounding_box()['height'], 40)
+        self.assertTrue(self.control.locator('#reset').is_hidden())
+        self.assertTrue(self.control.locator('#welcome').is_hidden())
+        self.assertGreaterEqual(self.control.locator('#start').bounding_box()['height'], 40)
+        self.assertGreaterEqual(self.control.locator('.preset.active').bounding_box()['height'], 40)
+        main_w = self.control.locator('.main-panel').bounding_box()['width']
+        self.assertGreater(self.control.locator('#start').bounding_box()['width'], main_w * 0.75)
         self.control.get_by_role('button', name='3 Min.').click()
         self.control.get_by_role('button', name='Countdown starten').click()
         expect(self.control.locator('#status-badge')).to_have_attribute('data-phase', 'running')
+        for selector in ('#pause', '#reset', '#welcome'):
+            self.assertGreaterEqual(self.control.locator(selector).bounding_box()['height'], 40)
         self.control.get_by_role('button', name='Pausieren').click()
         expect(self.control.locator('#status-badge')).to_have_attribute('data-phase', 'paused')
         self.control.get_by_role('button', name='Willkommensfolie anzeigen').click()
         expect(self.control.locator('#status-badge')).to_have_attribute('data-phase', 'welcome')
+        self.assertTrue(self.control.locator('#reset').is_hidden())
+        self.assertTrue(self.control.locator('#welcome').is_hidden())
 
     def test_20_native_projector_actions_are_grouped_next_to_preview(self):
         # Browser-only Tauri mock: verifies DOM order, accessibility and
@@ -474,6 +482,11 @@ class ProjectorTimerBrowserTests(unittest.TestCase):
         project = self.control.get_by_role('button', name='Auf Beamer projizieren')
         release = self.control.get_by_role('button', name='Beamer freigeben')
         expect(project).to_be_enabled(timeout=4000)
+        self.assertTrue(self.control.evaluate(
+            "document.body.classList.contains('native-mode')"))
+        self.assertTrue(self.control.locator('.topbar-actions').is_hidden())
+        expect(self.control.locator('.preview-caption')).to_contain_text(
+            'noch nicht auf den Beamer projiziert')
         self.assertTrue(self.control.evaluate("""() => {
           const panel = document.querySelector('.native-projection');
           return panel?.contains(document.querySelector('#open-display')) &&
@@ -486,10 +499,14 @@ class ProjectorTimerBrowserTests(unittest.TestCase):
         project.click()
         expect(release).to_be_visible(timeout=2000)
         expect(self.control.locator('.native-projection')).to_have_attribute('data-status', 'active')
+        expect(self.control.locator('.preview-caption')).to_contain_text(
+            'am tatsächlichen Beamer prüfen')
         release.click()
         expect(project).to_be_enabled(timeout=2000)
         expect(release).to_be_hidden(timeout=2000)
         expect(self.control.locator('.native-projection')).to_have_attribute('data-status', 'ready')
+        expect(self.control.locator('.preview-caption')).to_contain_text(
+            'noch nicht auf den Beamer projiziert')
         self.assertTrue(self.control.evaluate(
             'document.documentElement.scrollWidth <= window.innerWidth + 1'))
 
@@ -534,7 +551,16 @@ class ProjectorTimerBrowserTests(unittest.TestCase):
             expect(self.control.get_by_role('button', name='Auf Beamer projizieren')).to_be_enabled()
             self.control.screenshot(path=str(out / (label + '.png')),
                                     full_page=True, animations='disabled')
-        print('UBF_VISUAL_QA captured 5 screenshots; real church hardware NOT_TESTED', flush=True)
+        self.control.set_viewport_size({'width':1120, 'height':800})
+        self.control.get_by_role('button', name='3 Min.').click()
+        self.control.get_by_role('button', name='Countdown starten').click()
+        self.control.screenshot(path=str(out / 'native-running-1120x800.png'),
+                                full_page=True, animations='disabled')
+        self.control.get_by_role('button', name='Pausieren').click()
+        self.control.set_viewport_size({'width':390, 'height':844})
+        self.control.screenshot(path=str(out / 'native-paused-390x844.png'),
+                                full_page=True, animations='disabled')
+        print('UBF_VISUAL_QA captured 7 screenshots; real church hardware NOT_TESTED', flush=True)
 
     @staticmethod
     def _seconds(s):

@@ -99,6 +99,10 @@ function render() {
   pauseButton.disabled = lockedByOtherController;
   resumeButton.hidden = !paused;
   resumeButton.disabled = lockedByOtherController;
+  // A welcome slide needs only one operator action: Start. Hiding
+  // inapplicable controls also gives Start a full-width touch target.
+  resetButton.hidden = welcome;
+  welcomeButton.hidden = welcome;
   resetButton.disabled = welcome || lockedByOtherController;
   welcomeButton.disabled = welcome || lockedByOtherController;
   durationControls.classList.toggle('locked', !editable);

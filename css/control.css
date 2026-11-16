@@ -77,7 +77,13 @@ h2 { margin: 0; font-size: 15px; font-weight: 745; letter-spacing: -.02em; }
 .actions .secondary:hover:not(:disabled) { background: #dfeefa; }
 .actions .subtle { grid-column: 1 / -1; min-height: 45px; background: #fff; color: #47617b; border: 1px solid #d1dce6; }
 .actions .subtle:hover:not(:disabled) { background: #f5f8fb; }
-.actions .secondary[hidden] + .secondary { } /* stable layout when pause/resume toggle */
+/* Welcome/completed: one unmistakable primary command. During a countdown,
+   Pause/Resume and Reset naturally share the first action row. */
+.actions #start:not([hidden]) { grid-column: 1 / -1; }
+.actions:has(#start:not([hidden])) #welcome:not([hidden]) { grid-column: 2; }
+/* Native controls are relocated beside the projector preview, so do not
+   strand an inert "local control" status dot in the header. */
+.native-mode .topbar-actions { display: none; }
 
 .side-heading h2 { font-size: 20px; font-weight: 750; letter-spacing: -.035em; }
 .live-dot { flex: 0 0 10px; height: 10px; margin-top: 19px; border-radius: 50%; background: #a3afba; box-shadow: 0 0 0 4px #edf0f3; }
