@@ -39,6 +39,9 @@ if (native?.invoke) {
   const selector = panel.querySelector('#native-monitor');
   const releaseButton = panel.querySelector('#native-projector-release');
   let busy = false;
+  let pendingAction = null;
+  let operatorError = '';
+  let connectionError = '';
   let targets = [];
   let active = false;
   // Discard asynchronous monitor polls started before a newer operator
@@ -51,16 +54,36 @@ if (native?.invoke) {
   }
 
   function render() {
-    panel.dataset.status = busy ? 'busy' : active ? 'active' : targets.length ? 'ready' : 'missing';
+    const issue = connectionError || operatorError;
+    panel.dataset.status = issue ? 'error' : busy ? 'busy'
+      : active ? 'active' : targets.length ? 'ready' : 'missing';
+    panel.setAttribute('aria-busy', String(busy));
+    panel.querySelector('.native-status-label').textContent = issue ? 'BEAMER · PRÜFEN'
+      : pendingAction === 'open' ? 'PROJEKTION STARTET'
+      : pendingAction === 'release' ? 'PROJEKTION ENDET'
+      : active ? 'BEAMER · AKTIV' : targets.length ? 'BEAMER · BEREIT' : 'BEAMER · NICHT VERBUNDEN';
     caption.textContent = active
       ? 'Vorschau · Projektion am tatsächlichen Beamer prüfen.'
       : 'Vorschau · Timerbild ist noch nicht auf den Beamer projiziert.';
     selectorLabel.hidden = targets.length <= 1;
-    releaseButton.hidden = !active;
+    selector.disabled = busy || active || Boolean(connectionError);
+    // One relevant projector action at a time: the disabled "Projektion
+    // läuft" button hid the actionable release button on compact devices.
+    openButton.hidden = active || pendingAction === 'release';
+    releaseButton.hidden = !active && pendingAction !== 'release';
+    openButton.textContent = pendingAction === 'open'
+      ? 'Projektion wird geöffnet …' : 'Auf Beamer projizieren';
+    releaseButton.textContent = pendingAction === 'release'
+      ? 'Beamer wird freigegeben …' : 'Beamer freigeben';
+    openButton.disabled = busy || active || !targets.length || Boolean(connectionError);
     releaseButton.disabled = busy;
-    openButton.textContent = active ? 'Projektion läuft' : 'Auf Beamer projizieren';
-    openButton.disabled = busy || active || targets.length === 0;
-    if (active) {
+    if (issue) {
+      state.textContent = issue;
+    } else if (pendingAction === 'open') {
+      state.textContent = 'Vollbildfenster wird auf dem Beamer geöffnet …';
+    } else if (pendingAction === 'release') {
+      state.textContent = 'Timerbild wird geschlossen. Die nächste Präsentation startet nicht automatisch.';
+    } else if (active) {
       state.textContent = 'Projektion aktiv. „Beamer freigeben“ schließt nur den Timer. ' +
         'PowerPoint/Canva startet nicht automatisch.';
     } else if (!targets.length) {
@@ -84,8 +107,17 @@ if (native?.invoke) {
       // Ignore it rather than reversing the operator's successful action.
       if (busy || revision !== statusRevision) return;
       const selected = selector.value;
+      const beforeTargets = targets.map(target => target.id).join('\u0000');
+      const beforeActive = active;
       targets = newTargets;
       active = isActive;
+      connectionError = '';
+      // Keep a failed command visible across routine polling. A genuine
+      // native state or monitor topology change is useful recovery evidence.
+      if (beforeActive !== active ||
+          beforeTargets !== targets.map(target => target.id).join('\u0000')) {
+        operatorError = '';
+      }
       selector.replaceChildren();
       for (const target of targets) {
         const option = document.createElement('option');
@@ -97,16 +129,16 @@ if (native?.invoke) {
       render();
     } catch (error) {
       if (busy || revision !== statusRevision) return;
-      panel.dataset.status = 'error';
-      openButton.disabled = true;
-      releaseButton.disabled = true;
-      state.textContent = 'Windows-Beamerprüfung fehlgeschlagen: ' + explainError(error);
+      connectionError = 'Windows-Beamerprüfung fehlgeschlagen: ' + explainError(error);
+      render();
     }
   }
 
   openButton.addEventListener('click', async () => {
     if (busy || active || !targets.length) return;
     ++statusRevision; // Invalidate any in-flight monitor/status refresh.
+    operatorError = '';
+    pendingAction = 'open';
     busy = true;
     render();
     try {
@@ -116,38 +148,38 @@ if (native?.invoke) {
       await invoke('open_projector', {monitorKey});
       await refreshAfterAction();
     } catch (error) {
-      panel.dataset.status = 'error';
-      state.textContent = 'Projektion nicht gestartet: ' + explainError(error);
+      operatorError = 'Projektion nicht gestartet: ' + explainError(error);
     } finally {
       busy = false;
-      // Preserve a useful error instead of immediately overwriting it.
-      openButton.disabled = active || !targets.length;
-      releaseButton.disabled = false;
+      pendingAction = null;
+      render();
     }
   });
 
   releaseButton.addEventListener('click', async () => {
     if (busy || !active) return;
     ++statusRevision; // Invalidate any in-flight monitor/status refresh.
+    operatorError = '';
+    pendingAction = 'release';
     busy = true;
-    releaseButton.disabled = true;
+    render();
     try {
       await invoke('release_projector');
       await refreshAfterAction();
     } catch (error) {
-      panel.dataset.status = 'error';
-      state.textContent = 'Beamer konnte nicht freigegeben werden: ' + explainError(error);
+      operatorError = 'Beamer konnte nicht freigegeben werden: ' + explainError(error);
     } finally {
       busy = false;
-      releaseButton.disabled = false;
+      pendingAction = null;
+      render();
     }
   });
 
   async function refreshAfterAction() {
     // Do not call refresh() while busy; fetch the actual native state first.
     active = await invoke('projector_status');
-    busy = false;
-    render();
+    connectionError = '';
+    operatorError = '';
   }
 
   void refresh();

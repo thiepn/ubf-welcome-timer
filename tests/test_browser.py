@@ -37,11 +37,13 @@ NATIVE_BRIDGE_MOCK = r"""(() => {
   window.__nativePendingActions = [];
   window.__nativeForcedOpenError = '';
   window.__nativeForcedReleaseError = '';
+  window.__nativeForcedStatusError = '';
   window.open = () => { window.__nativePopupWasCalled = true; throw Error('native popup regression'); };
   window.__TAURI__ = {core: {invoke: async (command, args = {}) => {
     window.__nativeCalls.push({command, args});
     if (command === 'list_projector_targets') return window.__nativeTargets;
     if (command === 'projector_status') {
+      if (window.__nativeForcedStatusError) throw Error(window.__nativeForcedStatusError);
       if (window.__nativeDelayNextStatus) {
         window.__nativeDelayNextStatus = false;
         const captured = window.__nativeActive;
@@ -611,6 +613,82 @@ class ProjectorTimerBrowserTests(unittest.TestCase):
                                 full_page=True, animations='disabled')
         print('UBF_VISUAL_QA captured 7 screenshots; real church hardware NOT_TESTED', flush=True)
 
+    def test_23_native_operator_busy_and_active_actions_are_truthful(self):
+        self.control.add_init_script(script=NATIVE_BRIDGE_MOCK)
+        self.control.reload()
+        self.control.set_viewport_size({'width':390,'height':844})
+        panel = self.control.locator('.native-projection')
+        project = self.control.locator('#open-display')
+        release = self.control.locator('#native-projector-release')
+        expect(project).to_be_enabled(timeout=4000)
+        self.control.evaluate('window.__nativeHoldOpen = true')
+        project.click()
+        self.control.wait_for_function('window.__nativePendingActions.length === 1')
+        expect(panel).to_have_attribute('data-status','busy')
+        expect(panel).to_have_attribute('aria-busy','true')
+        expect(project).to_contain_text('wird geöffnet')
+        expect(project).to_be_disabled()
+        expect(self.control.locator('#native-projector-state')).to_contain_text('wird')
+        self.assertTrue(release.is_hidden())
+        self.control.evaluate('window.__nativePendingActions.shift()()')
+        expect(panel).to_have_attribute('data-status','active')
+        expect(panel).to_have_attribute('aria-busy','false')
+        expect(release).to_be_visible()
+        self.assertTrue(project.is_hidden(), 'Inactive disabled opener wastes native action space')
+        self.control.evaluate('window.__nativeHoldRelease = true')
+        release.click()
+        self.control.wait_for_function('window.__nativePendingActions.length === 1')
+        expect(panel).to_have_attribute('data-status','busy')
+        expect(release).to_contain_text('wird freigegeben')
+        expect(release).to_be_disabled()
+        self.assertTrue(project.is_hidden())
+        self.control.evaluate('window.__nativePendingActions.shift()()')
+        expect(panel).to_have_attribute('data-status','ready')
+        expect(project).to_be_enabled(timeout=2000)
+        expect(release).to_be_hidden()
+
+    def test_24_native_command_error_persists_until_retry(self):
+        self.control.add_init_script(script=NATIVE_BRIDGE_MOCK)
+        self.control.reload()
+        panel = self.control.locator('.native-projection')
+        project = self.control.locator('#open-display')
+        release = self.control.locator('#native-projector-release')
+        expect(project).to_be_enabled(timeout=4000)
+        self.control.evaluate("window.__nativeForcedOpenError = 'Die Beameranordnung hat sich geändert.'")
+        project.click()
+        expect(panel).to_have_attribute('data-status','error')
+        expect(self.control.locator('#native-projector-state')).to_contain_text('Beameranordnung')
+        self.control.wait_for_timeout(3300)
+        expect(panel).to_have_attribute('data-status','error')
+        expect(self.control.locator('#native-projector-state')).to_contain_text('Beameranordnung')
+        self.control.evaluate("window.__nativeForcedOpenError = ''")
+        project.click()
+        expect(panel).to_have_attribute('data-status','active')
+        expect(release).to_be_visible()
+        expect(self.control.locator('#native-projector-state')).not_to_contain_text('Beameranordnung')
+
+    def test_25_native_monitor_poll_failure_recovers_without_wrong_screen(self):
+        self.control.add_init_script(script=NATIVE_BRIDGE_MOCK)
+        self.control.reload()
+        panel = self.control.locator('.native-projection')
+        project = self.control.locator('#open-display')
+        expect(project).to_be_enabled(timeout=4000)
+        self.control.evaluate("""() => {
+            window.__nativeForcedStatusError = 'Windows-Status ist nicht verfügbar.';
+            window.dispatchEvent(new Event('focus'));
+        }""")
+        expect(panel).to_have_attribute('data-status','error',timeout=2500)
+        expect(project).to_be_disabled()
+        expect(self.control.locator('#native-projector-state')).to_contain_text('Windows-Status')
+        self.control.evaluate("""() => {
+            window.__nativeForcedStatusError = '';
+            window.dispatchEvent(new Event('focus'));
+        }""")
+        expect(project).to_be_enabled(timeout=2500)
+        expect(panel).to_have_attribute('data-status','ready')
+        self.assertTrue(self.control.evaluate(
+            'document.documentElement.scrollWidth <= window.innerWidth + 1'))
+
     @unittest.skipUnless(os.environ.get('UBF_CAPTURE_UI') == '1', 'CI visual evidence only')
     def test_22_capture_native_projector_operator_states(self):
         # Browser Chromium capture with a controlled native bridge, not a
@@ -668,9 +746,10 @@ class ProjectorTimerBrowserTests(unittest.TestCase):
         self.control.screenshot(path=str(out / 'state-error-390x844.png'),
                                 full_page=True, animations='disabled')
         self.control.wait_for_timeout(3300)
+        expect(panel).to_have_attribute('data-status','error')
         self.control.screenshot(path=str(out / 'state-error-after-poll-390x844.png'),
                                 full_page=True, animations='disabled')
-        print('UBF_NATIVE_STATES captured ready/opening/active/releasing/disconnected/error/error-after-poll',flush=True)
+        print('UBF_NATIVE_STATES captured ready/opening/active/releasing/disconnected/persistent error',flush=True)
 
     @staticmethod
     def _seconds(s):

@@ -55,3 +55,16 @@
 @media (max-width: 350px) {
   .native-projection { grid-template-columns: minmax(0,1fr) 136px; column-gap: 8px; }
 }
+
+/* Operator-critical state must be explicit, not inferred from disabled
+   buttons or a colored dot. Errors persist through background polling. */
+.native-projection[data-status="busy"] { border-color: #8bb6d7; background: #f0f7fc; }
+.native-projection[data-status="busy"] .native-status-dot {
+  background: #477ea6; box-shadow: 0 0 0 3px #dcebf6;
+}
+.native-projection[data-status="busy"] .native-projector-actions button:disabled {
+  opacity: .82;
+}
+.native-projection[data-status="error"] { border-color: #e6ae8d; background: #fff8f3; }
+.native-projection[data-status="error"] #native-projector-state { color: #88411e; }
+.native-projection #native-projector-state { overflow-wrap: anywhere; }
