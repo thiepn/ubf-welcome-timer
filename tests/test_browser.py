@@ -825,7 +825,7 @@ class ProjectorTimerBrowserTests(unittest.TestCase):
         self.assertEqual(saved_at_before_reload, saved_at_after_reload,
                          'Simply reopening must not falsify the last-saved timestamp')
         expect(page.locator('#restored-session')).to_be_visible()
-        expect(page.locator('#restored-detail')).to_contain_text('früheren Probe')
+        expect(page.locator('#restored-detail')).to_contain_text('Frühere Beobachtungen')
         expect(page.locator('select[aria-label="W05 Status"]')).to_have_value('FAIL')
         page.once('dialog', lambda dialog: dialog.dismiss())
         page.locator('#new-session').click()
