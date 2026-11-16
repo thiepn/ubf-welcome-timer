@@ -131,8 +131,18 @@ jobs:
           $original = [IO.File]::ReadAllBytes((Resolve-Path 'dist/windows-rehearsal/welcome.png').Path)
           try {
             [IO.File]::AppendAllText((Resolve-Path 'dist/windows-rehearsal/welcome.png').Path, 'TAMPER')
-            & powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\Verify-Windows-Rehearsal.ps1 -Folder .\dist\windows-rehearsal -ExpectedSourceSha $commit 2>&1 | Out-Null
-            if ($LASTEXITCODE -eq 0) { throw 'Tampered original PNG unexpectedly passed verification.' }
+            # The verifier must return an error on corrupted data. Capture
+            # expected stderr separately: PowerShell 5.1 converts 2>&1 from
+            # a native child to NativeCommandError under Stop preference.
+            $expectedErrorLog = Join-Path $env:RUNNER_TEMP 'expected-tamper-error.txt'
+            $args = @('-NoProfile','-ExecutionPolicy','Bypass','-File',
+              '.\scripts\Verify-Windows-Rehearsal.ps1','-Folder',
+              '.\dist\windows-rehearsal','-ExpectedSourceSha',$commit)
+            $probe = Start-Process -FilePath powershell.exe -ArgumentList $args -Wait -PassThru -NoNewWindow -RedirectStandardError $expectedErrorLog
+            if ($probe.ExitCode -eq 0) { throw 'Tampered original PNG unexpectedly passed verification.' }
+            if (-not (Select-String -LiteralPath $expectedErrorLog -SimpleMatch 'welcome.png' -Quiet)) {
+              throw 'Verifier exited nonzero for a reason other than the modified welcome image.'
+            }
             Write-Host 'TAMPER_REJECTED: corrupted PNG did not pass SHA-256 verification.'
           } finally {
             [IO.File]::WriteAllBytes((Resolve-Path 'dist/windows-rehearsal/welcome.png').Path, $original)
