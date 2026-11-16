@@ -209,3 +209,38 @@ Es wird **keine ausführbare Datei als Artifact hochgeladen**. Ein grüner
 CI-Build beweist nur technische Kompilierung, nicht die tatsächliche
 Windows-11-/HDMI-/PowerPoint-/Canva-Probe. Alle W01–W08 bleiben NOT_TESTED,
 Live-Einsatz bleibt NO_GO.
+
+
+## Probe-ZIP: Prüfen, starten, Beobachtungen sichern (ohne Veröffentlichung)
+
+Ein vollständig entpacktes **lokales** Probe-ZIP enthält jetzt auch
+`Start-Probe.cmd`, `Verify-Windows-Rehearsal.ps1` und das eigenständige
+Offline-Formular `ABNAHME_W01-W08.html`.
+
+1. Vom **genehmigten** Quell-Commit aus lokal bauen; ZIP auf den autorisierten
+   Testrechner kopieren und vollständig entpacken. `BUILD_MANIFEST.json`
+   vergleichen: Die Quell-SHA muss unabhängig mit dem ausdrücklich
+   akzeptierten GitHub-Commit übereinstimmen. Hashes aus demselben ZIP
+   beweisen nur **interne Konsistenz**, keine digitale Herausgebersignatur.
+2. `Start-Probe.cmd` doppelklicken. Das Skript prüft SHA-256 von EXE,
+   Original-`welcome.png` und Abnahmeformular, prüft die Probe-Kennzeichen
+   und verlangt **PROBE** als ausdrückliche Startbestätigung. Bei Fehler
+   nicht starten. Es umgeht keine Windows-SmartScreen-Warnung.
+3. `ABNAHME_W01-W08.html` lokal öffnen. Laptop-/Beamer-Metadaten eintragen.
+   W01–W08 stehen anfänglich auf **NOT_TESTED**, nicht PASS.
+   Das Formular kann nach der echten Beobachtung PASS/FAIL mit Kommentaren
+   speichern und als **JSON exportieren** (auch importieren) oder drucken.
+   Browser-Zwischenspeicherung alleine ist keine zuverlässige Sicherung.
+4. Für W05 PowerPoint **vor** und **nach** Timer-Freigabe getrennt prüfen;
+   für W06 Canva **Vollbild** und **Präsentationsansicht** getrennt.
+   Die Person am Zuschauerplatz dokumentiert private Referentenansichten,
+   Desktop-Flash, Timerverdeckung und Zeitverzug. Eine scheinbar korrekte
+   Folie im Nachhinein beweist keinen nahtlosen Handoff.
+5. Beim Entfernen des HDMI-Kabels, falscher Anzeige, Eingabefokusverlust
+   oder ungewollter Sichtbarkeit privater Inhalte den Test stoppen und FAIL
+   festhalten. Statisches `welcome.png` bleibt verfügbar.
+
+Der Prüfer **startet nichts automatisch**; nur eine ausdrücklich bestätigte
+lokale Probe öffnet die EXE. Es gibt keine Online-API, keine Uploads und keine
+automatische Live-Freigabe. Alle acht echten Gerätetests bleiben hier
+**NOT_TESTED**, Sonntagseinsatz **NO_GO**.

@@ -96,3 +96,26 @@ test('Windows rehearsal source build remains local-only', () => {
   assert.match(y, /pull_request\.number == 4/);
   assert.doesNotMatch(y.slice(y.indexOf('  native-windows:')), /upload-artifact|release\/upload|deploy/);
 });
+
+
+test('offline rehearsal kit remains part of the local ZIP only', () => {
+  const builder = file('scripts/Build-Windows-Rehearsal.ps1');
+  const verifier = file('scripts/Verify-Windows-Rehearsal.ps1');
+  const launcher = file('scripts/Start-Probe.cmd');
+  const worksheet = file('rehearsal/ACCEPTANCE_OFFLINE.html');
+  assert.match(builder, /Copy-Item -LiteralPath 'scripts\/Verify-Windows-Rehearsal.ps1'/);
+  assert.match(builder, /Copy-Item -LiteralPath 'scripts\/Start-Probe.cmd'/);
+  assert.match(builder, /ABNAHME_W01-W08.html/);
+  assert.match(builder, /acceptance_html_sha256/);
+  assert.match(builder, /Compress-Archive/);
+  assert.match(verifier, /ExpectedSourceSha/);
+  assert.match(verifier, /Get-FileHash/);
+  assert.match(verifier, /acceptance_html_sha256/);
+  assert.match(verifier, /Read-Host/);
+  assert.match(verifier, /Start-Process/);
+  assert.match(launcher, /Verify-Windows-Rehearsal.ps1/);
+  assert.match(worksheet, /@@SOURCE_SHA@@/);
+  assert.match(worksheet, /NOT_TESTED/);
+  assert.match(worksheet, /live_service:'NO_GO'/);
+  assert.doesNotMatch(worksheet, /https?:\/\//);
+});

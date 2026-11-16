@@ -42,6 +42,14 @@ if ($actualExe -ne [string]$manifest.executable_sha256) {
 if ($actualPng -ne [string]$manifest.welcome_png_sha256) {
   throw 'FEHLER: welcome.png wurde verändert. Nicht ausführen.'
 }
+$sheet = Join-Path $dir 'ABNAHME_W01-W08.html'
+if (-not (Test-Path -LiteralPath $sheet -PathType Leaf)) {
+  throw 'Das Offline-Abnahmeprotokoll fehlt.'
+}
+if ((Get-FileHash -LiteralPath $sheet -Algorithm SHA256).Hash -ne
+    [string]$manifest.acceptance_html_sha256) {
+  throw 'FEHLER: Das Offline-Protokoll wurde verändert.'
+}
 Write-Host "PR-Quell-SHA: $($manifest.source_commit)"
 Write-Host "EXE SHA256: $actualExe"
 Write-Host "welcome.png SHA256: $actualPng"
@@ -50,7 +58,7 @@ Write-Host 'Die Quell-SHA unabhängig mit dem genehmigten GitHub-Commit vergleic
 Write-Host 'Alle realen Windows-11-/Projektor-/PowerPoint-/Canva-Tests: NOT_TESTED.'
 Write-Host 'Live-Sonntagsgottesdienst: NO_GO.'
 
-if (-not $Launch) { exit 0 }
+if (-not $Launch) { return }
 if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT -or
     -not [Environment]::Is64BitOperatingSystem -or
     [Environment]::OSVersion.Version.Build -lt 22000) {

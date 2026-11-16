@@ -59,12 +59,22 @@ try {
   foreach ($doc in @('HANDOFF_OPERATOR_CARD_DE.md','PHYSICAL_ACCEPTANCE_WINDOWS11.md')) {
     Copy-Item -LiteralPath $doc -Destination $out
   }
+  Copy-Item -LiteralPath 'scripts/Verify-Windows-Rehearsal.ps1' -Destination $out
+  Copy-Item -LiteralPath 'scripts/Start-Probe.cmd' -Destination $out
+  $worksheet = Get-Content -LiteralPath 'rehearsal/ACCEPTANCE_OFFLINE.html' -Raw
+  if (-not $worksheet.Contains('@@SOURCE_SHA@@')) {
+    throw 'Offline acceptance worksheet must contain the exact-HEAD placeholder.'
+  }
+  $worksheet.Replace('@@SOURCE_SHA@@', $sha) |
+    Set-Content -LiteralPath "$out/ABNAHME_W01-W08.html" -Encoding UTF8
   $exeHash = (Get-FileHash "$out/UBF-Koeln-Timer-PROBE.exe" -Algorithm SHA256).Hash
   $pngHash = (Get-FileHash "$out/welcome.png" -Algorithm SHA256).Hash
+  $sheetHash = (Get-FileHash "$out/ABNAHME_W01-W08.html" -Algorithm SHA256).Hash
   [ordered]@{
     source_commit = $sha
     executable_sha256 = $exeHash
     welcome_png_sha256 = $pngHash
+    acceptance_html_sha256 = $sheetHash
     created_utc = [DateTime]::UtcNow.ToString('o')
     purpose = 'unsigned-local-physical-acceptance'
     physical_tests = 'NOT_TESTED'
@@ -73,8 +83,11 @@ try {
   @'
 LOKALE PROBE — KEIN RELEASE / KEINE LIVE-FREIGABE
 Nur auf genehmigtem Windows-11-x64-Testgeraet entpacken.
-BUILD_MANIFEST.json-Quell-SHA und EXE-Pruefsumme pruefen:
-  Get-FileHash .\UBF-Koeln-Timer-PROBE.exe -Algorithm SHA256
+BUILD_MANIFEST.json-Quell-SHA unabhaengig mit genehmigtem GitHub-Commit vergleichen.
+Start-Probe.cmd prueft EXE, Original-Welcome-PNG und HTML-Protokoll vor
+einem ausdruecklich bestaetigten Start. Sicherheitswarnungen beachten.
+Fuer Ergebnisse: ABNAHME_W01-W08.html im Browser offline oeffnen.
+W01-W08 beginnen immer NOT_TESTED. Am Ende JSON exportieren/aufheben.
 WebView2 muss installiert sein; Node/Rust sind zum Ausfuehren nicht noetig.
 Die EXE ist unsigniert; Sicherheitswarnungen nicht blind umgehen.
 Win+P -> Erweitern; Laptop als HAUPTANZEIGE waehlen.

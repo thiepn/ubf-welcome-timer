@@ -70,3 +70,20 @@ Weitere offizielle Hinweise:
 [Microsoft: PowerPoint auf zwei Bildschirmen](https://support.microsoft.com/en-us/powerpoint/present-on-multiple-monitors-and-view-speaker-notes-privately)
 und
 [Canva: Präsentationsmodi](https://www.canva.com/de_de/help/presentation-modes/).
+
+
+## Im lokalen Probe-ZIP
+
+1. `BUILD_MANIFEST.json`-Quell-SHA mit dem genehmigten GitHub-Commit
+   **unabhängig** vergleichen. Alle enthaltenen Dateien entpacken.
+2. `Start-Probe.cmd` führt SHA-256-Prüfungen durch; bei gültigen Dateien
+   und nur nach manueller Eingabe von **PROBE** startet die unsignierte EXE.
+   Windows-Sicherheitsmeldungen nicht unbesehen umgehen.
+3. `ABNAHME_W01-W08.html` im Browser offline öffnen. Alle acht Tests
+   stehen zunächst **NOT_TESTED**. Metadaten und beobachtete PASS/FAIL
+   eintragen; W05 PowerPoint (vorher/nachher) und W06 Canva
+   (Vollbild/Präsentationsansicht) gesondert dokumentieren.
+4. Zum Ende die Ergebnisdatei über **Ergebnisse als JSON sichern**
+   exportieren. Eine Datei auf einem autorisierten lokalen Datenträger
+   aufbewahren. Das Formular übermittelt keine Daten und setzt
+   niemals die Live-Freigabe.

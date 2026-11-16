@@ -767,6 +767,50 @@ class ProjectorTimerBrowserTests(unittest.TestCase):
                                 full_page=True, animations='disabled')
         print('UBF_NATIVE_STATES captured ready/opening/active/releasing/disconnected/persistent error',flush=True)
 
+    def test_27_offline_rehearsal_form_records_real_observations_only(self):
+        # This is a local file worksheet, not the projector. Verify no
+        # fabricated PASS and that save/restore works without a server.
+        page = self.context.new_page()
+        page.goto((ROOT / 'rehearsal' / 'ACCEPTANCE_OFFLINE.html').as_uri())
+        self.assertEqual(page.locator('.probe').count(), 8)
+        self.assertEqual(page.locator('.probe select').evaluate_all(
+            "(items) => items.filter(x => x.value === 'NOT_TESTED').length"), 8)
+        expect(page.locator('#summary')).to_contain_text('0 von 8 geprüft')
+        expect(page.locator('#summary')).to_contain_text('Live: NO_GO')
+        self.assertTrue(page.locator('#summary').is_visible())
+        page.locator('select[aria-label="W05 Status"]').select_option('FAIL')
+        page.locator('.probe').nth(4).locator('textarea').first.fill(
+            'PowerPoint zeigte den Desktop für zwei Sekunden')
+        page.locator('#tester').fill('Vor-Ort-Test')
+        expect(page.locator('#summary')).to_contain_text('1 von 8 geprüft')
+        expect(page.locator('#summary')).to_contain_text('1 FAIL')
+        with page.expect_download() as d:
+            page.locator('#export').click()
+        downloaded = d.value
+        payload = downloaded.path().read_text(encoding='utf-8')
+        import json
+        data = json.loads(payload)
+        self.assertEqual(data['schema'], 1)
+        self.assertEqual(data['live_service'], 'NO_GO')
+        self.assertEqual(data['steps']['W05']['status'], 'FAIL')
+        self.assertEqual(data['steps']['W01']['status'], 'NOT_TESTED')
+        page.locator('select[aria-label="W05 Status"]').select_option('NOT_TESTED')
+        page.locator('#tester').fill('')
+        page.locator('#import').set_input_files({
+            'name':'results.json','mimeType':'application/json','buffer':payload.encode('utf-8')
+        })
+        expect(page.locator('select[aria-label="W05 Status"]')).to_have_value('FAIL')
+        expect(page.locator('#tester')).to_have_value('Vor-Ort-Test')
+        # A different build must not inherit approval/status from this file.
+        data['source_commit'] = 'f' * 40
+        page.locator('#import').set_input_files({
+            'name':'wrong.json','mimeType':'application/json',
+            'buffer':json.dumps(data).encode('utf-8')
+        })
+        expect(page.locator('#msg')).to_contain_text('nicht übernommen')
+        expect(page.locator('#summary')).to_contain_text('Live: NO_GO')
+        page.close()
+
     @staticmethod
     def _seconds(s):
         mm,ss = map(int,s.split(':'))

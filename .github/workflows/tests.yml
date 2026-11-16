@@ -121,3 +121,21 @@ jobs:
         if: github.event_name == 'pull_request' && github.event.pull_request.number == 4
         shell: powershell
         run: .\scripts\Build-Windows-Rehearsal.ps1
+      - name: Verify local bundle and reject a tampered welcome PNG (NO EXECUTION)
+        if: github.event_name == 'pull_request' && github.event.pull_request.number == 4
+        shell: powershell
+        run: |
+          $commit = (git rev-parse HEAD).Trim()
+          & powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\Verify-Windows-Rehearsal.ps1 -Folder .\dist\windows-rehearsal -ExpectedSourceSha $commit
+          if ($LASTEXITCODE -ne 0) { throw 'Untampered rehearsal bundle verification failed.' }
+          $original = [IO.File]::ReadAllBytes((Resolve-Path 'dist/windows-rehearsal/welcome.png').Path)
+          try {
+            [IO.File]::AppendAllText((Resolve-Path 'dist/windows-rehearsal/welcome.png').Path, 'TAMPER')
+            & powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\Verify-Windows-Rehearsal.ps1 -Folder .\dist\windows-rehearsal -ExpectedSourceSha $commit 2>&1 | Out-Null
+            if ($LASTEXITCODE -eq 0) { throw 'Tampered original PNG unexpectedly passed verification.' }
+            Write-Host 'TAMPER_REJECTED: corrupted PNG did not pass SHA-256 verification.'
+          } finally {
+            [IO.File]::WriteAllBytes((Resolve-Path 'dist/windows-rehearsal/welcome.png').Path, $original)
+          }
+          & powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\Verify-Windows-Rehearsal.ps1 -Folder .\dist\windows-rehearsal -ExpectedSourceSha $commit
+          if ($LASTEXITCODE -ne 0) { throw 'Restored rehearsal bundle verification failed.' }
