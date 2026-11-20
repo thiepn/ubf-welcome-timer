@@ -27,3 +27,8 @@ Thumbs.db
 .vscode/
 
 # Deliberately NOT ignored: assets/*.png, source, test files
+
+# Generated desktop wrapper files (never commit binaries or staged assets)
+dist/
+src-tauri/target/
+src-tauri/gen/

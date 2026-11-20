@@ -1,0 +1,15 @@
+[package]
+name = "ubf-koeln-timer"
+version = "1.1.0"
+description = "Offline-first UBF Köln projector timer"
+authors = ["thiepn"]
+edition = "2021"
+build = "build.rs"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+tauri = { version = "2.12", default-features = true }
+tokio = { version = "1", features = ["time"] }
+
+[build-dependencies]
+tauri-build = { version = "2.5" }

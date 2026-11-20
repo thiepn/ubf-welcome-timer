@@ -3,53 +3,91 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>UBF Köln — Timersteuerung</title>
   <meta name="color-scheme" content="light">
+  <title>UBF Köln — Timersteuerung</title>
   <link rel="stylesheet" href="./css/control.css">
+  <link rel="stylesheet" href="./css/native-projector.css">
 </head>
 <body>
   <div class="app-shell">
     <header class="topbar">
-      <div class="identity"><span class="brand-mark" aria-hidden="true">U</span><div><div class="brand-name">UBF Köln</div><div class="brand-caption">Gottesdienst · Projektionssteuerung</div></div></div>
-      <button class="outline top-action" id="open-display" type="button">Projektionsfenster öffnen <span aria-hidden="true">↗</span></button>
+      <div class="identity">
+        <span class="brand-mark" aria-hidden="true">U</span>
+        <div class="brand-copy">
+          <div class="brand-name">UBF Köln</div>
+          <div class="brand-caption">GOTTESDIENST <span aria-hidden="true">/</span> REGIE</div>
+        </div>
+      </div>
+      <div class="topbar-actions">
+        <span class="desk-label"><span class="desk-label-dot" aria-hidden="true"></span> Lokale Steuerung</span>
+        <button class="outline top-action" id="open-display" type="button">Projektionsfenster öffnen <span aria-hidden="true">↗</span></button>
+      </div>
     </header>
 
     <main class="layout">
       <section class="main-panel" aria-labelledby="panel-title">
         <div class="section-heading">
-          <div><p class="eyebrow">COUNTDOWN</p><h1 id="panel-title">Timersteuerung</h1></div>
+          <div>
+            <p class="eyebrow">01 <span aria-hidden="true">/</span> ZEITSTEUERUNG</p>
+            <h1 id="panel-title">Countdown</h1>
+            <p class="section-lead">Bedienung am Laptop</p>
+          </div>
           <span id="status-badge" class="status-badge" data-phase="welcome">Willkommen</span>
         </div>
-        <div class="time-display" aria-live="off"><span id="current-time">05:00</span><span class="time-caption" id="time-caption">Bereit</span></div>
+
+        <div class="time-display" aria-live="off">
+          <span class="time-display-label">VERBLEIBENDE ZEIT</span>
+          <span id="current-time">05:00</span>
+          <span class="time-caption" id="time-caption">Bereit</span>
+        </div>
         <div class="small-track" aria-hidden="true"><div id="track-progress"></div></div>
+
         <div class="duration-controls" id="duration-controls">
-          <h2>Dauer wählen</h2>
+          <div class="control-heading">
+            <h2>Dauer wählen</h2>
+            <span class="control-helper">Schnellauswahl</span>
+          </div>
           <div class="preset-grid" role="group" aria-label="Timer-Voreinstellungen">
             <button type="button" class="preset" data-duration="60000">1 Min.</button>
             <button type="button" class="preset" data-duration="180000">3 Min.</button>
             <button type="button" class="preset active" data-duration="300000" aria-pressed="true">5 Min.</button>
             <button type="button" class="preset" data-duration="600000">10 Min.</button>
           </div>
-          <div class="custom-header"><h2>Eigene Dauer</h2><span class="hint">00:10 – 99:59</span></div>
+          <div class="custom-header">
+            <h2>Eigene Dauer</h2>
+            <span class="hint">00:10 – 99:59</span>
+          </div>
           <div class="custom-fields">
-            <label>Minuten<input type="number" inputmode="numeric" id="minutes" min="0" max="99" step="1" value="5"></label>
+            <label for="minutes">Minuten
+              <input type="number" inputmode="numeric" id="minutes" min="0" max="99" step="1" value="5">
+            </label>
             <span class="colon" aria-hidden="true">:</span>
-            <label>Sekunden<input type="number" inputmode="numeric" id="seconds" min="0" max="59" step="1" value="0"></label>
+            <label for="seconds">Sekunden
+              <input type="number" inputmode="numeric" id="seconds" min="0" max="59" step="1" value="0">
+            </label>
           </div>
           <p class="input-error" id="input-error" role="alert" hidden>Gültige Dauer: 00:10 bis 99:59.</p>
         </div>
-        <div class="actions">
-          <button type="button" class="primary" id="start">▶ <span>Countdown starten</span></button>
-          <button type="button" class="secondary" id="pause" hidden>Ⅱ <span>Pausieren</span></button>
-          <button type="button" class="secondary" id="resume" hidden>▶ <span>Fortsetzen</span></button>
-          <button type="button" class="secondary" id="reset" disabled>↺ <span>Zurücksetzen</span></button>
+
+        <div class="actions" role="group" aria-label="Countdown bedienen">
+          <button type="button" class="primary" id="start"><span aria-hidden="true">▶</span><span>Countdown starten</span></button>
+          <button type="button" class="secondary" id="pause" hidden><span aria-hidden="true">Ⅱ</span><span>Pausieren</span></button>
+          <button type="button" class="secondary" id="resume" hidden><span aria-hidden="true">▶</span><span>Fortsetzen</span></button>
+          <button type="button" class="secondary" id="reset" disabled><span aria-hidden="true">↺</span><span>Zurücksetzen</span></button>
           <button type="button" class="subtle" id="welcome" disabled>Willkommensfolie anzeigen</button>
         </div>
       </section>
 
       <aside class="side-panel" aria-label="Projektorstatus">
-        <div class="side-heading"><h2>Projektor</h2><span class="live-dot" id="connection-dot"></span></div>
-        <p class="connection-text" id="connection-status">Verbindung wird geprüft …</p>
+        <div class="side-heading">
+          <div>
+            <p class="eyebrow">02 <span aria-hidden="true">/</span> BEAMER</p>
+            <h2>Publikumsansicht</h2>
+          </div>
+          <span class="live-dot" id="connection-dot" aria-hidden="true"></span>
+        </div>
+        <p class="connection-text" id="connection-status" role="status">Verbindung wird geprüft …</p>
+
         <div class="mini-preview" id="mini-preview" aria-label="Vorschau der Projektionsansicht">
           <img src="./assets/welcome.png" alt="Willkommensfolie" class="preview-welcome">
           <img src="./assets/background-clean.png" alt="" class="preview-clean">
@@ -59,8 +97,9 @@
           </svg>
           <div class="preview-time" id="preview-time">05:00</div>
         </div>
-        <p class="preview-caption">Vorschau · Das Projektionsfenster bleibt separat geöffnet.</p>
-        <ol class="guide">
+        <p class="preview-caption">Live-Vorschau <span aria-hidden="true">·</span> Die Folie auf dem Beamer kann separat geprüft werden.</p>
+
+        <ol class="guide" aria-label="Projektionsfenster einrichten">
           <li>Projektionsfenster öffnen.</li>
           <li>Fenster auf den Beamer ziehen.</li>
           <li><kbd>F11</kbd> für Vollbild drücken.</li>
@@ -69,8 +108,9 @@
         <div class="message" id="system-message" role="status" hidden></div>
       </aside>
     </main>
-    <footer>UBF Köln · Lokaler Timer · Ohne Internet mit lokalem Server</footer>
+    <footer>UBF Köln <span aria-hidden="true">/</span> Lokale Projektionssteuerung</footer>
   </div>
   <script type="module" src="./js/control.js"></script>
+  <script type="module" src="./js/native-projector.js"></script>
 </body>
 </html>

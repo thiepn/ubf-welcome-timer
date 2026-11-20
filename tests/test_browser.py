@@ -21,6 +21,61 @@ ROOT = Path(__file__).resolve().parents[1]
 PORT = 18765
 BASE = f'http://127.0.0.1:{PORT}'
 
+# This mock exercises the real controller DOM bridge in Chromium; it is NOT
+# a WebView2 test and deliberately cannot certify physical projector behavior.
+NATIVE_BRIDGE_MOCK = r"""(() => {
+  window.__nativeCalls = [];
+  window.__nativeActive = false;
+  window.__nativeTargets = [
+    {id: 'PROJECTOR-A|1920|0|1920|1080', name: 'Projektor A', width: 1920, height: 1080}
+  ];
+  window.__nativePopupWasCalled = false;
+  window.__nativeDelayNextStatus = false;
+  window.__nativePendingStatus = [];
+  window.__nativeHoldOpen = false;
+  window.__nativeHoldRelease = false;
+  window.__nativePendingActions = [];
+  window.__nativeForcedOpenError = '';
+  window.__nativeForcedReleaseError = '';
+  window.__nativeForcedStatusError = '';
+  window.open = () => { window.__nativePopupWasCalled = true; throw Error('native popup regression'); };
+  window.__TAURI__ = {core: {invoke: async (command, args = {}) => {
+    window.__nativeCalls.push({command, args});
+    if (command === 'list_projector_targets') return window.__nativeTargets;
+    if (command === 'projector_status') {
+      if (window.__nativeForcedStatusError) throw Error(window.__nativeForcedStatusError);
+      if (window.__nativeDelayNextStatus) {
+        window.__nativeDelayNextStatus = false;
+        const captured = window.__nativeActive;
+        return new Promise(resolve => {
+          window.__nativePendingStatus.push(() => resolve(captured));
+        });
+      }
+      return window.__nativeActive;
+    }
+    if (command === 'open_projector') {
+      if (window.__nativeForcedOpenError) throw Error(window.__nativeForcedOpenError);
+      if (!window.__nativeTargets.some(target => target.id === args.monitorKey)) {
+        throw Error('Die Beameranordnung hat sich geändert.');
+      }
+      if (window.__nativeHoldOpen) {
+        await new Promise(resolve => { window.__nativePendingActions.push(resolve); });
+      }
+      window.__nativeActive = true;
+      return;
+    }
+    if (command === 'release_projector') {
+      if (window.__nativeForcedReleaseError) throw Error(window.__nativeForcedReleaseError);
+      if (window.__nativeHoldRelease) {
+        await new Promise(resolve => { window.__nativePendingActions.push(resolve); });
+      }
+      window.__nativeActive = false;
+      return;
+    }
+    throw Error('Unexpected command: ' + command);
+  }}};
+})();"""
+
 
 class ProjectorTimerBrowserTests(unittest.TestCase):
     @classmethod
@@ -81,6 +136,12 @@ class ProjectorTimerBrowserTests(unittest.TestCase):
         self.assertTrue(self.display.locator('img.slide-image--welcome').evaluate('el => { const clean = document.querySelector(\".slide-image--clean\"); return el.naturalWidth === clean.naturalWidth && el.naturalHeight === clean.naturalHeight; }'))
         self.assertEqual(self.display.locator('button,input,nav').count(), 0)
         self.assertTrue(self.display.locator('body').evaluate('(el) => getComputedStyle(el).cursor === "none"'))
+
+    def test_01b_browser_fallback_retains_connection_status(self):
+        # Native-only UI simplification must not hide browser presence.
+        self.assertFalse(self.control.locator('#connection-status').is_hidden())
+        self.assertFalse(self.control.locator('#connection-dot').is_hidden())
+        expect(self.control.locator('.side-heading h2')).to_have_text('Publikumsansicht')
 
     def test_02_start_pause_resume_reset_return_and_sync(self):
         self.control.get_by_role('button',name='3 Min.').click()
@@ -280,6 +341,787 @@ class ProjectorTimerBrowserTests(unittest.TestCase):
             expect(first.locator('#start')).to_be_enabled(timeout=8000)
         finally:
             fallback.close()
+
+    def test_15_native_handoff_does_not_reset_running_countdown(self):
+        # Real controller code with a mocked Tauri command bridge. The
+        # browser display exercises actual BroadcastChannel/localStorage.
+        self.control.add_init_script(script=NATIVE_BRIDGE_MOCK)
+        self.control.reload()
+        project = self.control.get_by_role('button', name='Auf Beamer projizieren')
+        expect(project).to_be_enabled(timeout=4000)
+        project.click()
+        expect(self.control.get_by_role('button', name='Beamer freigeben')).to_be_visible()
+        self.assertIn('startet nicht automatisch',
+                      self.control.locator('#native-projector-state').inner_text())
+        self.assertTrue(self.control.evaluate('window.__nativeActive'))
+        self.assertFalse(self.control.evaluate('window.__nativePopupWasCalled'))
+        self.control.get_by_role('button', name='3 Min.').click()
+        self.control.get_by_role('button', name='Countdown starten').click()
+        expect(self.display.locator('#stage')).to_have_class(re.compile('is-timer'))
+        self.control.get_by_role('button', name='Beamer freigeben').click()
+        expect(self.control.get_by_role('button', name='Beamer freigeben')).to_be_hidden()
+        expect(self.control.locator('#status-badge')).to_have_attribute('data-phase', 'running')
+        self.assertFalse(self.control.evaluate('window.__nativeActive'))
+
+        # Simulate the native display being closed, then reopened after the
+        # PowerPoint handoff: the controller's authoritative timer survives.
+        self.display.close()
+        self.display = self.context.new_page()
+        self.display.on('pageerror', lambda e: self.errors.append(f'reopened display: {e}'))
+        self.display.goto(BASE + '/display.html')
+        expect(self.display.locator('#stage')).to_have_class(re.compile('is-timer'), timeout=4000)
+        project.click()
+        expect(self.control.get_by_role('button', name='Beamer freigeben')).to_be_visible()
+        calls = self.control.evaluate('window.__nativeCalls')
+        self.assertTrue(any(call['command'] == 'open_projector' and
+                            call['args']['monitorKey'] == 'PROJECTOR-A|1920|0|1920|1080'
+                            for call in calls))
+        self.assertLessEqual(abs(self._seconds(self.display.locator('#timer-numbers').inner_text())
+                                 - self._seconds(self.control.locator('#current-time').inner_text())), 1)
+
+    def test_16_native_display_rearrangement_refuses_stale_target(self):
+        # A layout change between target listing and clicking MUST NOT open a
+        # different monitor. The Rust resolver separately tests this invariant.
+        self.control.add_init_script(script=NATIVE_BRIDGE_MOCK)
+        self.control.reload()
+        expect(self.control.get_by_role('button', name='Auf Beamer projizieren')).to_be_enabled()
+        self.control.evaluate("""() => {
+          window.__nativeTargets = [
+            {id:'MONITOR-A|-1920|0|1920|1080', name:'Monitor A', width:1920, height:1080},
+            {id:'PROJECTOR-B|1920|0|1280|720', name:'Projektor B', width:1280, height:720}
+          ];
+          window.dispatchEvent(new Event('focus'));
+        }""")
+        picker = self.control.locator('#native-monitor')
+        expect(picker).to_be_visible(timeout=4000)
+        picker.select_option('PROJECTOR-B|1920|0|1280|720')
+        self.control.evaluate("""() => {
+          window.__nativeTargets = [
+            {id:'PROJECTOR-B|-1280|0|1280|720', name:'Projektor B', width:1280, height:720},
+            {id:'MONITOR-A|1920|0|1920|1080', name:'Monitor A', width:1920, height:1080}
+          ];
+        }""")
+        self.control.get_by_role('button', name='Auf Beamer projizieren').click()
+        expect(self.control.locator('#native-projector-state')).to_contain_text(
+            'Die Beameranordnung hat sich geändert.', timeout=2000)
+        self.assertFalse(self.control.evaluate('window.__nativeActive'))
+        self.assertFalse(self.control.evaluate('window.__nativePopupWasCalled'))
+
+    def test_17_in_flight_status_must_not_erase_a_new_projector_handoff(self):
+        # Deterministically reproduce a status request started before the
+        # operator clicks 'Auf Beamer projizieren'. Its late "inactive" reply
+        # must not hide Beamer freigeben after the actual opening succeeds.
+        self.control.add_init_script(script=NATIVE_BRIDGE_MOCK)
+        self.control.reload()
+        project = self.control.get_by_role('button', name='Auf Beamer projizieren')
+        release = self.control.get_by_role('button', name='Beamer freigeben')
+        expect(project).to_be_enabled(timeout=4000)
+        self.control.evaluate("""() => {
+          window.__nativeDelayNextStatus = true;
+          window.dispatchEvent(new Event('focus'));
+        }""")
+        self.control.wait_for_function('window.__nativePendingStatus.length === 1')
+        project.click()
+        expect(release).to_be_visible(timeout=2000)
+        self.control.evaluate('window.__nativePendingStatus.shift()()')
+        self.control.wait_for_timeout(100)
+        # On the old native-projector.js, the stale poll sets active=false,
+        # hiding the release control during an ongoing service.
+        self.assertTrue(release.is_visible(),
+                        'Stale status concealed Beamer freigeben after successful projection')
+        self.assertTrue(self.control.evaluate('window.__nativeActive'))
+
+    def test_18_in_flight_status_must_not_resurrect_a_released_projection(self):
+        # Opposite handoff race: the cached "active" answer must not revive
+        # release controls after Beamer freigeben has closed the projection.
+        self.control.add_init_script(script=NATIVE_BRIDGE_MOCK)
+        self.control.reload()
+        project = self.control.get_by_role('button', name='Auf Beamer projizieren')
+        release = self.control.get_by_role('button', name='Beamer freigeben')
+        expect(project).to_be_enabled(timeout=4000)
+        project.click()
+        expect(release).to_be_visible(timeout=2000)
+        self.control.evaluate("""() => {
+          window.__nativeDelayNextStatus = true;
+          window.dispatchEvent(new Event('focus'));
+        }""")
+        self.control.wait_for_function('window.__nativePendingStatus.length === 1')
+        release.click()
+        expect(project).to_be_enabled(timeout=2000)
+        expect(release).to_be_hidden(timeout=2000)
+        self.control.evaluate('window.__nativePendingStatus.shift()()')
+        self.control.wait_for_timeout(100)
+        self.assertTrue(project.is_enabled(),
+                        'Stale status prevents reprojecting after release')
+        self.assertTrue(release.is_hidden(),
+                        'Stale active status resurrected release control after handoff')
+        self.assertFalse(self.control.evaluate('window.__nativeActive'))
+
+    def test_19_responsive_regie_layout_preserves_real_timer_controls(self):
+        # Desktop: real controls remain primary; audience preview is separate.
+        left = self.control.locator('.main-panel').bounding_box()
+        right = self.control.locator('.side-panel').bounding_box()
+        self.assertLess(left['x'] + left['width'], right['x'] + 2)
+        self.assertTrue(self.control.locator('#open-display').is_visible())
+        self.assertTrue(self.control.locator('#mini-preview img.preview-welcome').evaluate(
+            '(img) => img.complete && img.naturalWidth > 0'))
+        self.assertTrue(self.control.evaluate(
+            'document.documentElement.scrollWidth <= window.innerWidth + 1'))
+
+        # Compact viewport must stack the actual controls, not merely crop
+        # the operator panel or show a horizontal scroll bar.
+        self.control.set_viewport_size({'width': 390, 'height': 844})
+        left = self.control.locator('.main-panel').bounding_box()
+        right = self.control.locator('.side-panel').bounding_box()
+        self.assertGreaterEqual(right['y'], left['y'] + left['height'] - 2)
+        self.assertTrue(self.control.evaluate(
+            'document.documentElement.scrollWidth <= window.innerWidth + 1'))
+        self.assertTrue(self.control.locator('#reset').is_hidden())
+        self.assertTrue(self.control.locator('#welcome').is_hidden())
+        self.assertGreaterEqual(self.control.locator('#start').bounding_box()['height'], 40)
+        self.assertGreaterEqual(self.control.locator('.preset.active').bounding_box()['height'], 40)
+        main_w = self.control.locator('.main-panel').bounding_box()['width']
+        self.assertGreater(self.control.locator('#start').bounding_box()['width'], main_w * 0.75)
+        self.control.get_by_role('button', name='3 Min.').click()
+        self.control.get_by_role('button', name='Countdown starten').click()
+        expect(self.control.locator('#status-badge')).to_have_attribute('data-phase', 'running')
+        for selector in ('#pause', '#reset', '#welcome'):
+            self.assertGreaterEqual(self.control.locator(selector).bounding_box()['height'], 40)
+        self.control.get_by_role('button', name='Pausieren').click()
+        expect(self.control.locator('#status-badge')).to_have_attribute('data-phase', 'paused')
+        self.control.get_by_role('button', name='Willkommensfolie anzeigen').click()
+        expect(self.control.locator('#status-badge')).to_have_attribute('data-phase', 'welcome')
+        self.assertTrue(self.control.locator('#reset').is_hidden())
+        self.assertTrue(self.control.locator('#welcome').is_hidden())
+
+    def test_20_native_projector_actions_are_grouped_next_to_preview(self):
+        # Browser-only Tauri mock: verifies DOM order, accessibility and
+        # state transitions; does not claim physical native WebView2 behavior.
+        self.control.add_init_script(script=NATIVE_BRIDGE_MOCK)
+        self.control.reload()
+        self.control.set_viewport_size({'width': 390, 'height': 844})
+        project = self.control.get_by_role('button', name='Auf Beamer projizieren')
+        release = self.control.get_by_role('button', name='Beamer freigeben')
+        expect(project).to_be_enabled(timeout=4000)
+        self.assertTrue(self.control.evaluate(
+            "document.body.classList.contains('native-mode')"))
+        self.assertTrue(self.control.locator('.topbar-actions').is_hidden())
+        # Browser BroadcastChannel peer presence cannot certify native
+        # projector visibility. Never show contradictory connection claims.
+        expect(self.control.locator('.side-heading h2')).to_have_text('Folienvorschau')
+        expect(self.control.locator('.side-panel')).to_have_attribute('aria-label','Folienvorschau')
+        self.assertTrue(self.control.locator('#connection-status').is_hidden())
+        self.assertTrue(self.control.locator('#connection-dot').is_hidden())
+        expect(self.control.locator('.preview-caption')).to_contain_text(
+            'noch nicht auf den Beamer projiziert')
+        self.assertTrue(self.control.evaluate("""() => {
+          const panel = document.querySelector('.native-projection');
+          return panel?.contains(document.querySelector('#open-display')) &&
+                 panel.contains(document.querySelector('#native-projector-release')) &&
+                 panel.parentElement?.classList.contains('layout') &&
+                 document.querySelector('.guide').hidden;
+        }"""))
+        self.assertTrue(self.control.evaluate(
+            'document.documentElement.scrollWidth <= window.innerWidth + 1'))
+        # Same native button is on the initial screen, before the timer,
+        # not after the entire preview section as in the baseline screenshot.
+        self.assertTrue(self.control.evaluate("""() => {
+          const b = document.querySelector('#open-display').getBoundingClientRect();
+          const timer = document.querySelector('.main-panel').getBoundingClientRect();
+          const panel = document.querySelector('.native-projection').getBoundingClientRect();
+          return b.top >= 0 && b.bottom <= innerHeight &&
+                 panel.bottom < timer.top && b.top < timer.top;
+        }"""))
+        self.assertTrue(self.control.evaluate("""() => {
+          const b = document.querySelector('#start').getBoundingClientRect();
+          return b.top >= 0 && b.bottom <= innerHeight;
+        }"""))
+        # No resize-driven button clone or lost event handler.
+        self.control.set_viewport_size({'width':1366,'height':768})
+        self.assertTrue(self.control.evaluate("""() => {
+          const timer = document.querySelector('.main-panel').getBoundingClientRect();
+          const panel = document.querySelector('.native-projection').getBoundingClientRect();
+          const preview = document.querySelector('.side-panel').getBoundingClientRect();
+          return panel.left > timer.right &&
+                 Math.abs(panel.left-preview.left) <= 2 &&
+                 panel.bottom < preview.top &&
+                 document.querySelectorAll('#open-display').length === 1 &&
+                 document.querySelectorAll('#native-projector-release').length === 1;
+        }"""))
+        self.control.set_viewport_size({'width':390,'height':844})
+        project.click()
+        expect(release).to_be_visible(timeout=2000)
+        expect(self.control.locator('.native-projection')).to_have_attribute('data-status', 'active')
+        expect(self.control.locator('.preview-caption')).to_contain_text(
+            'am tatsächlichen Beamer prüfen')
+        release.click()
+        expect(project).to_be_enabled(timeout=2000)
+        expect(release).to_be_hidden(timeout=2000)
+        expect(self.control.locator('.native-projection')).to_have_attribute('data-status', 'ready')
+        expect(self.control.locator('.preview-caption')).to_contain_text(
+            'noch nicht auf den Beamer projiziert')
+        self.assertTrue(self.control.evaluate(
+            'document.documentElement.scrollWidth <= window.innerWidth + 1'))
+
+    @unittest.skipUnless(os.environ.get('UBF_CAPTURE_UI') == '1', 'CI visual evidence only')
+    def test_21_capture_operator_console_visual_qa(self):
+        """Save actual Chromium screenshots with original Canva assets in CI.
+
+        Screenshots are CI-only transient review evidence, never a deployment
+        or a changed user-facing image. Separate browser/native bridge mock.
+        """
+        out = ROOT / 'artifacts' / 'ui-qa'
+        out.mkdir(parents=True, exist_ok=True)
+        for label, width, height in [
+            ('desktop-1366x768', 1366, 768),
+            ('laptop-1120x800', 1120, 800),
+            ('compact-390x844', 390, 844),
+        ]:
+            self.control.set_viewport_size({'width':width, 'height':height})
+            self.control.screenshot(path=str(out / (label + '.png')),
+                                    full_page=True, animations='disabled')
+            metrics = self.control.evaluate("""() => {
+              const p = document.querySelector('.main-panel').getBoundingClientRect();
+              const s = document.querySelector('.side-panel').getBoundingClientRect();
+              const a = document.querySelector('#start').getBoundingClientRect();
+              return {width: innerWidth, height: innerHeight,
+                      scrollWidth: document.documentElement.scrollWidth,
+                      scrollHeight: document.documentElement.scrollHeight,
+                      mainBottom: Math.round(p.bottom),
+                      sideTop: Math.round(s.top),
+                      startY: Math.round(a.top)};
+            }""")
+            print('UBF_VISUAL_QA', label, metrics, flush=True)
+
+        self.control.add_init_script(script=NATIVE_BRIDGE_MOCK)
+        self.control.reload()
+        expect(self.control.locator('.native-projection')).to_be_visible()
+        for label, width, height in [
+            ('native-desktop-1366x768', 1366, 768),
+            ('native-compact-390x844', 390, 844),
+        ]:
+            self.control.set_viewport_size({'width':width, 'height':height})
+            expect(self.control.get_by_role('button', name='Auf Beamer projizieren')).to_be_enabled()
+            self.control.screenshot(path=str(out / (label + '.png')),
+                                    full_page=True, animations='disabled')
+            metrics = self.control.evaluate("""() => {
+              const panel = document.querySelector('.native-projection').getBoundingClientRect();
+              const project = document.querySelector('#open-display').getBoundingClientRect();
+              const start = document.querySelector('#start').getBoundingClientRect();
+              return {viewport:innerWidth, projectorY:Math.round(panel.y),
+                      projectorButtonBottom:Math.round(project.bottom),
+                      timerStartBottom:Math.round(start.bottom),
+                      horizontalOverflow:document.documentElement.scrollWidth-innerWidth};
+            }""")
+            print('UBF_NATIVE_ACTION_VISIBILITY', label, metrics, flush=True)
+        self.control.set_viewport_size({'width':1120, 'height':800})
+        self.control.get_by_role('button', name='3 Min.').click()
+        self.control.get_by_role('button', name='Countdown starten').click()
+        self.control.screenshot(path=str(out / 'native-running-1120x800.png'),
+                                full_page=True, animations='disabled')
+        self.control.get_by_role('button', name='Pausieren').click()
+        self.control.set_viewport_size({'width':390, 'height':844})
+        self.control.screenshot(path=str(out / 'native-paused-390x844.png'),
+                                full_page=True, animations='disabled')
+        print('UBF_VISUAL_QA captured 7 screenshots; real church hardware NOT_TESTED', flush=True)
+
+    def test_23_native_operator_busy_and_active_actions_are_truthful(self):
+        self.control.add_init_script(script=NATIVE_BRIDGE_MOCK)
+        self.control.reload()
+        self.control.set_viewport_size({'width':390,'height':844})
+        panel = self.control.locator('.native-projection')
+        project = self.control.locator('#open-display')
+        release = self.control.locator('#native-projector-release')
+        expect(project).to_be_enabled(timeout=4000)
+        self.control.evaluate('window.__nativeHoldOpen = true')
+        project.click()
+        self.control.wait_for_function('window.__nativePendingActions.length === 1')
+        expect(panel).to_have_attribute('data-status','busy')
+        expect(panel).to_have_attribute('aria-busy','true')
+        expect(project).to_contain_text('wird geöffnet')
+        expect(project).to_be_disabled()
+        expect(self.control.locator('#native-projector-state')).to_contain_text('wird')
+        self.assertTrue(release.is_hidden())
+        self.control.evaluate('window.__nativePendingActions.shift()()')
+        expect(panel).to_have_attribute('data-status','active')
+        expect(panel).to_have_attribute('aria-busy','false')
+        expect(release).to_be_visible()
+        # The screenshot baseline showed "BEAMER · AKTIV" beside the
+        # browser-only "Kein Projektionsfenster erkannt"; this is forbidden.
+        self.assertTrue(self.control.locator('#connection-status').is_hidden())
+        expect(self.control.locator('.side-heading h2')).to_have_text('Folienvorschau')
+        self.assertTrue(project.is_hidden(), 'Inactive disabled opener wastes native action space')
+        self.control.evaluate('window.__nativeHoldRelease = true')
+        release.click()
+        self.control.wait_for_function('window.__nativePendingActions.length === 1')
+        expect(panel).to_have_attribute('data-status','busy')
+        expect(release).to_contain_text('wird freigegeben')
+        expect(release).to_be_disabled()
+        self.assertTrue(project.is_hidden())
+        self.control.evaluate('window.__nativePendingActions.shift()()')
+        expect(panel).to_have_attribute('data-status','ready')
+        expect(project).to_be_enabled(timeout=2000)
+        expect(release).to_be_hidden()
+
+    def test_24_native_command_error_persists_until_retry(self):
+        self.control.add_init_script(script=NATIVE_BRIDGE_MOCK)
+        self.control.reload()
+        panel = self.control.locator('.native-projection')
+        project = self.control.locator('#open-display')
+        release = self.control.locator('#native-projector-release')
+        expect(project).to_be_enabled(timeout=4000)
+        self.control.evaluate("window.__nativeForcedOpenError = 'Die Beameranordnung hat sich geändert.'")
+        project.click()
+        expect(panel).to_have_attribute('data-status','error')
+        expect(self.control.locator('#native-projector-state')).to_contain_text('Beameranordnung')
+        self.control.wait_for_timeout(3300)
+        expect(panel).to_have_attribute('data-status','error')
+        expect(self.control.locator('#native-projector-state')).to_contain_text('Beameranordnung')
+        self.control.evaluate("window.__nativeForcedOpenError = ''")
+        project.click()
+        expect(panel).to_have_attribute('data-status','active')
+        expect(release).to_be_visible()
+        expect(self.control.locator('#native-projector-state')).not_to_contain_text('Beameranordnung')
+
+    def test_25_native_monitor_poll_failure_recovers_without_wrong_screen(self):
+        self.control.add_init_script(script=NATIVE_BRIDGE_MOCK)
+        self.control.reload()
+        panel = self.control.locator('.native-projection')
+        project = self.control.locator('#open-display')
+        expect(project).to_be_enabled(timeout=4000)
+        self.control.evaluate("""() => {
+            window.__nativeForcedStatusError = 'Windows-Status ist nicht verfügbar.';
+            window.dispatchEvent(new Event('focus'));
+        }""")
+        expect(panel).to_have_attribute('data-status','error',timeout=2500)
+        expect(project).to_be_disabled()
+        expect(self.control.locator('#native-projector-state')).to_contain_text('Windows-Status')
+        self.control.evaluate("""() => {
+            window.__nativeForcedStatusError = '';
+            window.dispatchEvent(new Event('focus'));
+        }""")
+        expect(project).to_be_enabled(timeout=2500)
+        expect(panel).to_have_attribute('data-status','ready')
+        self.assertTrue(self.control.evaluate(
+            'document.documentElement.scrollWidth <= window.innerWidth + 1'))
+
+    @unittest.skipUnless(os.environ.get('UBF_CAPTURE_UI') == '1', 'CI visual evidence only')
+    def test_22_capture_native_projector_operator_states(self):
+        # Browser Chromium capture with a controlled native bridge, not a
+        # Windows projector or a screenshot of PowerPoint/Canva.
+        out = ROOT / 'artifacts' / 'ui-qa'
+        out.mkdir(parents=True, exist_ok=True)
+        self.control.add_init_script(script=NATIVE_BRIDGE_MOCK)
+        self.control.reload()
+        self.control.set_viewport_size({'width':390,'height':844})
+        panel = self.control.locator('.native-projection')
+        project = self.control.locator('#open-display')
+        release = self.control.locator('#native-projector-release')
+        expect(project).to_be_enabled(timeout=4000)
+        self.control.screenshot(path=str(out / 'state-ready-390x844.png'),
+                                full_page=True, animations='disabled')
+
+        self.control.evaluate('window.__nativeHoldOpen = true')
+        project.click()
+        self.control.wait_for_function('window.__nativePendingActions.length === 1')
+        expect(panel).to_have_attribute('data-status','busy')
+        self.control.screenshot(path=str(out / 'state-opening-390x844.png'),
+                                full_page=True, animations='disabled')
+        self.control.evaluate('window.__nativePendingActions.shift()()')
+        expect(release).to_be_visible(timeout=2000)
+        expect(panel).to_have_attribute('data-status','active')
+        self.control.screenshot(path=str(out / 'state-active-390x844.png'),
+                                full_page=True, animations='disabled')
+
+        self.control.evaluate('window.__nativeHoldRelease = true')
+        release.click()
+        self.control.wait_for_function('window.__nativePendingActions.length === 1')
+        self.control.screenshot(path=str(out / 'state-releasing-390x844.png'),
+                                full_page=True, animations='disabled')
+        self.control.evaluate('window.__nativePendingActions.shift()()')
+        expect(project).to_be_enabled(timeout=2000)
+
+        self.control.evaluate("""() => {
+          window.__nativeTargets = [];
+          window.dispatchEvent(new Event('focus'));
+        }""")
+        expect(panel).to_have_attribute('data-status','missing',timeout=3000)
+        self.control.screenshot(path=str(out / 'state-disconnected-390x844.png'),
+                                full_page=True, animations='disabled')
+
+        self.control.evaluate("""() => {
+          window.__nativeTargets = [
+            {id:'PROJECTOR-A|1920|0|1920|1080',name:'Projektor A',width:1920,height:1080}
+          ];
+          window.dispatchEvent(new Event('focus'));
+        }""")
+        expect(project).to_be_enabled(timeout=3000)
+        self.control.evaluate("window.__nativeForcedOpenError = 'Die Beameranordnung hat sich geändert.'")
+        project.click()
+        expect(panel).to_have_attribute('data-status','error',timeout=2000)
+        self.control.screenshot(path=str(out / 'state-error-390x844.png'),
+                                full_page=True, animations='disabled')
+        self.control.wait_for_timeout(3300)
+        expect(panel).to_have_attribute('data-status','error')
+        self.control.screenshot(path=str(out / 'state-error-after-poll-390x844.png'),
+                                full_page=True, animations='disabled')
+        print('UBF_NATIVE_STATES captured ready/opening/active/releasing/disconnected/persistent error',flush=True)
+
+    def test_27_offline_rehearsal_form_records_real_observations_only(self):
+        # This is a local file worksheet, not the projector. Verify no
+        # fabricated PASS and that save/restore works without a server.
+        page = self.context.new_page()
+        page.goto((ROOT / 'rehearsal' / 'ACCEPTANCE_OFFLINE.html').as_uri())
+        self.assertEqual(page.locator('.probe').count(), 8)
+        self.assertEqual(page.locator('.probe-head select').evaluate_all(
+            "(items) => items.filter(x => x.value === 'NOT_TESTED').length"), 8)
+        self.assertEqual(page.locator('.probe select').count(), 12)
+        expect(page.locator('#summary')).to_contain_text('0 von 8 geprüft')
+        expect(page.locator('#summary')).to_contain_text('Live: NO_GO')
+        self.assertTrue(page.locator('#summary').is_visible())
+        page.locator('select[aria-label="W05 Status"]').select_option('FAIL')
+        page.locator('.probe').nth(4).locator('textarea').first.fill(
+            'PowerPoint zeigte den Desktop für zwei Sekunden')
+        page.locator('#tester').fill('Vor-Ort-Test')
+        expect(page.locator('#summary')).to_contain_text('1 von 8 geprüft')
+        expect(page.locator('#summary')).to_contain_text('1 FAIL')
+        with page.expect_download() as d:
+            page.locator('#export').click()
+        downloaded = d.value
+        payload = downloaded.path().read_text(encoding='utf-8')
+        import json
+        data = json.loads(payload)
+        self.assertEqual(data['schema'], 1)
+        self.assertEqual(data['live_service'], 'NO_GO')
+        self.assertEqual(data['steps']['W05']['status'], 'FAIL')
+        self.assertEqual(data['steps']['W01']['status'], 'NOT_TESTED')
+        page.locator('select[aria-label="W05 Status"]').select_option('NOT_TESTED')
+        page.locator('#tester').fill('')
+        page.locator('#import').set_input_files({
+            'name':'results.json','mimeType':'application/json','buffer':payload.encode('utf-8')
+        })
+        expect(page.locator('select[aria-label="W05 Status"]')).to_have_value('FAIL')
+        expect(page.locator('#tester')).to_have_value('Vor-Ort-Test')
+        # A different build must not inherit approval/status from this file.
+        data['source_commit'] = 'f' * 40
+        page.locator('#import').set_input_files({
+            'name':'wrong.json','mimeType':'application/json',
+            'buffer':json.dumps(data).encode('utf-8')
+        })
+        expect(page.locator('#msg')).to_contain_text('nicht übernommen')
+        expect(page.locator('#summary')).to_contain_text('Live: NO_GO')
+        # A return visit must clearly identify an earlier rehearsal's results.
+        # Reset requires confirmation and cannot carry the old FAIL or notes
+        # into a new physical acceptance session.
+        saved_at_before_reload = page.evaluate("""() => {
+            const key='ubf-physical-rehearsal-v1-'+document.getElementById('build-sha').textContent;
+            return JSON.parse(localStorage.getItem(key)).saved_at;
+        }""")
+        page.reload()
+        saved_at_after_reload = page.evaluate("""() => {
+            const key='ubf-physical-rehearsal-v1-'+document.getElementById('build-sha').textContent;
+            return JSON.parse(localStorage.getItem(key)).saved_at;
+        }""")
+        self.assertEqual(saved_at_before_reload, saved_at_after_reload,
+                         'Simply reopening must not falsify the last-saved timestamp')
+        expect(page.locator('#restored-session')).to_be_visible()
+        expect(page.locator('#restored-detail')).to_contain_text('Frühere Beobachtungen')
+        expect(page.locator('select[aria-label="W05 Status"]')).to_have_value('FAIL')
+        page.once('dialog', lambda dialog: dialog.dismiss())
+        page.locator('#new-session').click()
+        expect(page.locator('select[aria-label="W05 Status"]')).to_have_value('FAIL')
+        page.once('dialog', lambda dialog: dialog.accept())
+        page.locator('#new-session').click()
+        expect(page.locator('#restored-session')).to_be_hidden()
+        expect(page.locator('select[aria-label="W05 Status"]')).to_have_value('NOT_TESTED')
+        expect(page.locator('#tester')).to_have_value('')
+        expect(page.locator('#summary')).to_contain_text('0 von 8 geprüft')
+        page.reload()
+        expect(page.locator('#restored-session')).to_be_hidden()
+        expect(page.locator('#summary')).to_contain_text('0 von 8 geprüft')
+        page.close()
+
+    def test_28_handoff_pass_requires_both_observed_scenarios(self):
+        # Current worksheet previously accepted W05/W06 PASS without either
+        # handoff scenario being recorded; never treat that as qualified.
+        page = self.context.new_page()
+        page.goto((ROOT / 'rehearsal' / 'ACCEPTANCE_OFFLINE.html').as_uri())
+        for id, index in [('W05', 4), ('W06', 5)]:
+            row = page.locator('.probe').nth(index)
+            status = page.locator(f'select[aria-label="{id} Status"]')
+            status.select_option('PASS')
+            expect(status).to_have_value('NOT_TESTED')
+            expect(row.locator('.evidence-hint')).to_contain_text('nicht übernommen')
+            notes = row.locator('textarea')
+            notes.nth(1).fill('Erste Variante tatsächlich beobachtet')
+            status.select_option('PASS')
+            expect(status).to_have_value('NOT_TESTED')
+            notes.nth(2).fill('Zweite Variante tatsächlich beobachtet')
+            # Notes alone are not a verdict. Both scenarios must be marked PASS.
+            status.select_option('PASS')
+            expect(status).to_have_value('NOT_TESTED')
+            for field in (['prepared','after'] if id=='W05' else ['full','presenter']):
+                row.locator(f'select[aria-label="{id} {field} Ergebnis"]').select_option('PASS')
+            status.select_option('PASS')
+            expect(status).to_have_value('PASS')
+            notes.nth(1).fill('')
+            expect(status).to_have_value('NOT_TESTED')
+
+        # Legacy JSON must remain importable without rewriting its raw
+        # historical PASS, but the UI/export must flag missing evidence.
+        legacy = page.evaluate("""() => ({
+            schema:1,source_commit:document.getElementById('build-sha').textContent,
+            steps:{W05:{status:'PASS',observation:'Alte Gesamtbewertung',
+                        extra:{prepared:'',after:''}}},
+            meta:{tester:'Historischer Test'},live_service:'NO_GO'
+        })""")
+        import json
+        page.locator('#import').set_input_files({
+            'name':'legacy.json','mimeType':'application/json',
+            'buffer':json.dumps(legacy).encode('utf-8')
+        })
+        expect(page.locator('select[aria-label="W05 Status"]')).to_have_value('PASS')
+        expect(page.locator('#summary')).to_contain_text('W05 PASS ohne vollständige Belege')
+        expect(page.locator('.probe').nth(4)).to_have_attribute('data-status','unqualified')
+        with page.expect_download() as d:
+            page.locator('#export').click()
+        saved = json.loads(d.value.path().read_text(encoding='utf-8'))
+        self.assertIn('W05', saved['evidence_gaps'])
+        self.assertEqual(saved['steps']['W05']['status'], 'PASS')
+        self.assertEqual(saved['steps']['W05']['observation'], 'Alte Gesamtbewertung')
+        self.assertEqual(saved['live_service'], 'NO_GO')
+        page.close()
+
+    def test_29_handoff_verdicts_fail_closed_and_legacy_json_remains(self):
+        # A nonempty note can describe a failure. Each scenario therefore
+        # needs a distinct human-selected verdict before overall PASS.
+        import json
+        page = self.context.new_page()
+        page.goto((ROOT / 'rehearsal' / 'ACCEPTANCE_OFFLINE.html').as_uri())
+        w05 = page.locator('.probe').nth(4)
+        summary = page.locator('#summary')
+        overall = page.locator('select[aria-label="W05 Status"]')
+        first = w05.locator('select[aria-label="W05 prepared Ergebnis"]')
+        second = w05.locator('select[aria-label="W05 after Ergebnis"]')
+        notes = w05.locator('textarea')
+        notes.nth(1).fill('Beamer zeigte die richtige Publikumsfolie')
+        notes.nth(2).fill('Nach Freigabe zeigte sich kurz der Desktop')
+        first.select_option('PASS')
+        second.select_option('FAIL')
+        expect(overall).to_have_value('FAIL')
+        overall.select_option('PASS')
+        expect(overall).to_have_value('FAIL')  # A known failed handoff stays FAIL
+        expect(summary).to_contain_text('1 FAIL')
+        expect(summary).to_contain_text('Live: NO_GO')
+        second.select_option('PASS')
+        overall.select_option('PASS')
+        expect(overall).to_have_value('PASS')
+        second.select_option('FAIL')
+        expect(overall).to_have_value('FAIL')
+        second.select_option('PASS')
+        expect(overall).to_have_value('FAIL')  # Never auto-promote a failed test
+        overall.select_option('PASS')
+        expect(overall).to_have_value('PASS')
+        notes.nth(1).fill('')
+        expect(overall).to_have_value('NOT_TESTED')
+        with page.expect_download() as dl:
+            page.locator('#export').click()
+        exported = json.loads(dl.value.path().read_text(encoding='utf-8'))
+        self.assertEqual(exported['schema'], 1)
+        self.assertEqual(exported['steps']['W05']['extra_status'],
+                         {'prepared':'PASS','after':'PASS'})
+        self.assertEqual(exported['steps']['W05']['status'], 'NOT_TESTED')
+        self.assertEqual(exported['live_service'], 'NO_GO')
+
+        # Import old schema-1 data with both narrative notes: no per-scenario
+        # verdicts existed then, so preserve the raw historical PASS but flag it.
+        legacy = {
+            'schema':1,
+            'source_commit':page.locator('#build-sha').text_content(),
+            'steps':{'W06':{'status':'PASS','observation':'Historische Bewertung',
+                            'extra':{'full':'Vollbild beobachtet',
+                                     'presenter':'Präsentationsansicht beobachtet'}}},
+            'meta':{'tester':'Altdaten'},
+            'live_service':'NO_GO'
+        }
+        page.locator('#import').set_input_files({
+            'name':'old.json','mimeType':'application/json',
+            'buffer':json.dumps(legacy).encode('utf-8')
+        })
+        w06 = page.locator('.probe').nth(5)
+        expect(page.locator('select[aria-label="W06 Status"]')).to_have_value('PASS')
+        expect(w06.locator('select[aria-label="W06 full Ergebnis"]')).to_have_value('NOT_TESTED')
+        expect(w06).to_have_attribute('data-status','unqualified')
+        expect(summary).to_contain_text('W06 PASS ohne vollständige Belege')
+        with page.expect_download() as dl:
+            page.locator('#export').click()
+        preserved = json.loads(dl.value.path().read_text(encoding='utf-8'))
+        self.assertIn('W06', preserved['evidence_gaps'])
+        self.assertEqual(preserved['steps']['W06']['status'], 'PASS')
+        self.assertEqual(preserved['steps']['W06']['observation'], 'Historische Bewertung')
+        self.assertEqual(preserved['steps']['W06']['extra']['full'], 'Vollbild beobachtet')
+        self.assertEqual(preserved['steps']['W06']['extra_status'],
+                         {'full':'NOT_TESTED','presenter':'NOT_TESTED'})
+        page.close()
+
+    def test_30_historical_pass_with_failed_variant_cannot_hide_fail(self):
+        # Reproduction on previous HEAD: importing a historical top-level
+        # PASS with a failed scenario left the summary at 0 FAIL, and editing
+        # the scenario while legacyPass was set did not update overall status.
+        import json
+        page = self.context.new_page()
+        page.goto((ROOT / 'rehearsal' / 'ACCEPTANCE_OFFLINE.html').as_uri())
+        source = page.locator('#build-sha').text_content()
+        for code, index, fields in [('W05',4,('prepared','after')),
+                                    ('W06',5,('full','presenter'))]:
+            old = {'schema':1,'source_commit':source,
+                   'meta':{'tester':'Historische Probe'},
+                   'steps':{code:{'status':'PASS',
+                                 'observation':'Früherer Gesamtstatus',
+                                 'extra':{fields[0]:'Fehler am Beamer beobachtet',
+                                          fields[1]:'Noch nicht beurteilt'},
+                                 'extra_status':{fields[0]:'FAIL',fields[1]:'NOT_TESTED'}}},
+                   'live_service':'NO_GO'}
+            page.locator('#import').set_input_files({
+                'name':'historical.json','mimeType':'application/json',
+                'buffer':json.dumps(old).encode('utf-8')
+            })
+            overall = page.locator(f'select[aria-label="{code} Status"]')
+            row = page.locator('.probe').nth(index)
+            expect(overall).to_have_value('PASS')  # Historical raw value unchanged
+            expect(row).to_have_attribute('data-status','FAIL')
+            expect(page.locator('#summary')).to_contain_text('1 FAIL')
+            expect(page.locator('#summary')).to_contain_text('Live: NO_GO')
+            expect(row.locator('.evidence-hint')).to_contain_text('Historischer Gesamtstatus PASS')
+            with page.expect_download() as d:
+                page.locator('#export').click()
+            exported = json.loads(d.value.path().read_text(encoding='utf-8'))
+            self.assertEqual(exported['steps'][code]['status'],'PASS')
+            self.assertEqual(exported['steps'][code]['extra_status'][fields[0]],'FAIL')
+            self.assertIn(code, exported['evidence_gaps'])
+            # An actual edit ends historical read-only treatment: fail wins.
+            row.locator(f'select[aria-label="{code} {fields[1]} Ergebnis"]').select_option('PASS')
+            expect(overall).to_have_value('FAIL')
+            overall.select_option('NOT_TESTED')
+            expect(overall).to_have_value('FAIL')
+            overall.select_option('PASS')
+            expect(overall).to_have_value('FAIL')
+            # Re-evaluation must be manual after fixing the observed failure.
+            row.locator(f'select[aria-label="{code} {fields[0]} Ergebnis"]').select_option('PASS')
+            expect(overall).to_have_value('FAIL')
+            overall.select_option('PASS')
+            expect(overall).to_have_value('PASS')
+        page.close()
+
+    def test_31_import_and_export_preserve_observation_provenance(self):
+        # Importing/exporting historical projector reports must not rewrite
+        # the last-operator-edit time as if the observation was made today.
+        import json
+        from datetime import datetime
+        page = self.context.new_page()
+        page.goto((ROOT / 'rehearsal' / 'ACCEPTANCE_OFFLINE.html').as_uri())
+        source = page.locator('#build-sha').text_content()
+        past = '2026-11-03T12:34:56.000Z'
+        record = {'schema':1,'source_commit':source,
+                  'meta':{'tester':'Historischer Beobachter'},
+                  'steps':{'W05':{'status':'FAIL',
+                                  'observation':'Desktop kurz auf dem Beamer sichtbar'}},
+                  'saved_at':past,'live_service':'NO_GO'}
+        page.locator('#import').set_input_files({
+            'name':'past.json','mimeType':'application/json',
+            'buffer':json.dumps(record).encode('utf-8')
+        })
+        expect(page.locator('#restored-session')).to_be_visible()
+        expect(page.locator('#restored-detail')).to_contain_text('Importierte Beobachtungen')
+        expect(page.locator('#summary')).to_contain_text('1 FAIL')
+        expect(page.locator('select[aria-label="W05 Status"]')).to_have_value('FAIL')
+        with page.expect_download() as d:
+            page.locator('#export').click()
+        exported = json.loads(d.value.path().read_text(encoding='utf-8'))
+        self.assertEqual(exported['saved_at'],past)
+        self.assertEqual(exported['steps']['W05']['observation'],
+                         record['steps']['W05']['observation'])
+        self.assertIn('exported_at',exported)
+        self.assertGreater(datetime.fromisoformat(exported['exported_at'].replace('Z','+00:00')),
+                           datetime.fromisoformat(past.replace('Z','+00:00')))
+        page.reload()
+        expect(page.locator('#restored-session')).to_be_visible()
+        self.assertEqual(page.evaluate("""() => {
+            const key='ubf-physical-rehearsal-v1-'+document.getElementById('build-sha').textContent;
+            return JSON.parse(localStorage.getItem(key)).saved_at;
+        }"""),past)
+        # A real manual edit is the only action that advances saved_at.
+        page.locator('#tester').fill('Neue Beobachtung ergänzt')
+        with page.expect_download() as d:
+            page.locator('#export').click()
+        modified = json.loads(d.value.path().read_text(encoding='utf-8'))
+        self.assertNotEqual(modified['saved_at'],past)
+        self.assertEqual(modified['meta']['tester'],'Neue Beobachtung ergänzt')
+
+        # Old schema-1 exports without saved_at are still importable, but
+        # their unknown observation date must stay unknown.
+        record.pop('saved_at')
+        page.locator('#import').set_input_files({
+            'name':'old-schema1.json','mimeType':'application/json',
+            'buffer':json.dumps(record).encode('utf-8')
+        })
+        expect(page.locator('#restored-detail')).to_contain_text('Zeitpunkt unbekannt')
+        with page.expect_download() as d:
+            page.locator('#export').click()
+        unknown = json.loads(d.value.path().read_text(encoding='utf-8'))
+        self.assertIsNone(unknown['saved_at'])
+        self.assertIn('exported_at',unknown)
+        self.assertEqual(unknown['live_service'],'NO_GO')
+        page.once('dialog',lambda dialog:dialog.accept())
+        page.locator('#new-session').click()
+        expect(page.locator('#summary')).to_contain_text('0 von 8 geprüft')
+        expect(page.locator('#restored-session')).to_be_hidden()
+        page.close()
+
+    def test_32_all_other_passes_require_observations(self):
+        # W01-04/W07-08 previously allowed PASS without any audience note.
+        import json
+        page = self.context.new_page()
+        page.goto((ROOT / 'rehearsal' / 'ACCEPTANCE_OFFLINE.html').as_uri())
+        for id in ('W01','W02','W03','W04','W07','W08'):
+            card = page.locator('.probe').nth(int(id[-2:])-1)
+            status = page.locator(f'select[aria-label="{id} Status"]')
+            note = card.locator('textarea').first
+            status.select_option('PASS')
+            expect(status).to_have_value('NOT_TESTED')
+            expect(card.locator('.evidence-hint')).to_contain_text('echte Beobachtung')
+            note.fill('Reales Beamerbild aus Publikumsperspektive geprüft')
+            status.select_option('PASS')
+            expect(status).to_have_value('PASS')
+            note.fill(' ')
+            expect(status).to_have_value('NOT_TESTED')
+        expect(page.locator('#summary')).to_contain_text('0 von 8 geprüft')
+        expect(page.locator('#summary')).to_contain_text('Live: NO_GO')
+        legacy={'schema':1,'source_commit':page.locator('#build-sha').text_content(),
+                'steps':{'W01':{'status':'PASS','observation':''},
+                         'W08':{'status':'PASS','observation':'  '}},
+                'meta':{'tester':'Frühere Probe'},
+                'saved_at':'2026-11-03T12:34:56Z','live_service':'NO_GO'}
+        page.locator('#import').set_input_files({
+            'name':'old.json','mimeType':'application/json',
+            'buffer':json.dumps(legacy).encode('utf-8')
+        })
+        expect(page.locator('select[aria-label="W01 Status"]')).to_have_value('PASS')
+        expect(page.locator('select[aria-label="W08 Status"]')).to_have_value('PASS')
+        expect(page.locator('.probe').nth(0)).to_have_attribute('data-status','unqualified')
+        expect(page.locator('.probe').nth(7)).to_have_attribute('data-status','unqualified')
+        expect(page.locator('#summary')).to_contain_text('0 von 8 geprüft')
+        expect(page.locator('#summary')).to_contain_text('W01, W08 PASS ohne vollständige Belege')
+        with page.expect_download() as d:
+            page.locator('#export').click()
+        data=json.loads(d.value.path().read_text(encoding='utf-8'))
+        self.assertEqual(data['schema'],1)
+        self.assertEqual(data['steps']['W01']['status'],'PASS')
+        self.assertEqual(data['steps']['W08']['status'],'PASS')
+        self.assertEqual(data['evidence_gaps'],['W01','W08'])
+        self.assertEqual(data['saved_at'],'2026-11-03T12:34:56Z')
+        self.assertEqual(data['live_service'],'NO_GO')
+        page.close()
 
     @staticmethod
     def _seconds(s):

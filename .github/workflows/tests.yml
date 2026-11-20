@@ -50,8 +50,18 @@ jobs:
         run: python -m pip install --requirement requirements-test.txt
       - name: Install Chromium and Linux dependencies
         run: python -m playwright install --with-deps chromium
-      - name: Run browser tests
+      - name: Run browser tests and capture transient UI screenshots
+        env:
+          UBF_CAPTURE_UI: '1'
         run: npm run test:browser
+      - name: Attach short-lived browser screenshots for visual QA
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ubf-controller-ui-qa
+          path: artifacts/ui-qa/*.png
+          retention-days: 1
+          if-no-files-found: warn
 
   windows-launch:
     name: Windows launcher HTTP smoke (Windows Server 2022 runner)
@@ -80,3 +90,62 @@ jobs:
           node-version: '18'
       - name: Verify launcher refuses unsupported Node.js
         run: node --test tests/windows-node18.test.js
+
+  native-windows:
+    name: Native Tauri compile and Rust policy tests (no packaging)
+    runs-on: windows-2022
+    timeout-minutes: 35
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+      - name: Check staged desktop frontend
+        run: node --test tests/native-desktop.test.js
+      - name: Compile and run native unit tests (no installer)
+        run: cargo test --manifest-path src-tauri/Cargo.toml
+      - name: Run real WebView2 dual-window timer propagation (no physical projector)
+        run: node tests/native-webview2-smoke.mjs
+      # Draft PR #4 only. Windows CI makes and then discards a local ZIP;
+      # never upload runnable binaries or publish a release.
+      - name: Checkout exact PR HEAD for local rehearsal build
+        if: github.event_name == 'pull_request' && github.event.pull_request.number == 4
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Build local unsigned rehearsal ZIP (NO UPLOAD)
+        if: github.event_name == 'pull_request' && github.event.pull_request.number == 4
+        shell: powershell
+        run: .\scripts\Build-Windows-Rehearsal.ps1
+      - name: Verify local bundle and reject a tampered welcome PNG (NO EXECUTION)
+        if: github.event_name == 'pull_request' && github.event.pull_request.number == 4
+        shell: powershell
+        run: |
+          $commit = (git rev-parse HEAD).Trim()
+          & powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\Verify-Windows-Rehearsal.ps1 -Folder .\dist\windows-rehearsal -ExpectedSourceSha $commit
+          if ($LASTEXITCODE -ne 0) { throw 'Untampered rehearsal bundle verification failed.' }
+          $original = [IO.File]::ReadAllBytes((Resolve-Path 'dist/windows-rehearsal/welcome.png').Path)
+          try {
+            [IO.File]::AppendAllText((Resolve-Path 'dist/windows-rehearsal/welcome.png').Path, 'TAMPER')
+            # The verifier must return an error on corrupted data. Capture
+            # expected stderr separately: PowerShell 5.1 converts 2>&1 from
+            # a native child to NativeCommandError under Stop preference.
+            $expectedErrorLog = Join-Path $env:RUNNER_TEMP 'expected-tamper-error.txt'
+            $args = @('-NoProfile','-ExecutionPolicy','Bypass','-File',
+              '.\scripts\Verify-Windows-Rehearsal.ps1','-Folder',
+              '.\dist\windows-rehearsal','-ExpectedSourceSha',$commit)
+            $probe = Start-Process -FilePath powershell.exe -ArgumentList $args -Wait -PassThru -NoNewWindow -RedirectStandardError $expectedErrorLog
+            if ($probe.ExitCode -eq 0) { throw 'Tampered original PNG unexpectedly passed verification.' }
+            if (-not (Select-String -LiteralPath $expectedErrorLog -SimpleMatch 'welcome.png' -Quiet)) {
+              throw 'Verifier exited nonzero for a reason other than the modified welcome image.'
+            }
+            Write-Host 'TAMPER_REJECTED: corrupted PNG did not pass SHA-256 verification.'
+          } finally {
+            [IO.File]::WriteAllBytes((Resolve-Path 'dist/windows-rehearsal/welcome.png').Path, $original)
+          }
+          & powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\Verify-Windows-Rehearsal.ps1 -Folder .\dist\windows-rehearsal -ExpectedSourceSha $commit
+          if ($LASTEXITCODE -ne 0) { throw 'Restored rehearsal bundle verification failed.' }

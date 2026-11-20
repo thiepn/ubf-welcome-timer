@@ -99,6 +99,10 @@ function render() {
   pauseButton.disabled = lockedByOtherController;
   resumeButton.hidden = !paused;
   resumeButton.disabled = lockedByOtherController;
+  // A welcome slide needs only one operator action: Start. Hiding
+  // inapplicable controls also gives Start a full-width touch target.
+  resetButton.hidden = welcome;
+  welcomeButton.hidden = welcome;
   resetButton.disabled = welcome || lockedByOtherController;
   welcomeButton.disabled = welcome || lockedByOtherController;
   durationControls.classList.toggle('locked', !editable);
@@ -202,6 +206,7 @@ resetButton.addEventListener('click', () => command((now) => resetTimer(state, n
 welcomeButton.addEventListener('click', () => command((now) => returnToWelcome(state, now)));
 
 $('#open-display').addEventListener('click', () => {
+  if (globalThis.__TAURI__?.core?.invoke) return; // Native projector is owned by Rust.
   const popup = window.open(new URL('./display.html', location.href), 'ubf-koeln-projector');
   if (!popup) setWarning('Pop-up blockiert. Projektionsfenster über display.html direkt öffnen.');
   else popup.focus();
